@@ -1,0 +1,20 @@
+# Local credentials and editor state
+.env
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Odoo runtime leftovers (filestore and sessions live in the Docker volume)
+*.log
+filestore/
+sessions/
+.local/

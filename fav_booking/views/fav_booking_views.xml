@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_fav_booking_list" model="ir.ui.view">
+        <field name="name">fav.booking.list</field>
+        <field name="model">fav.booking</field>
+        <field name="arch" type="xml">
+            <list string="Bookings" decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="product_id"/>
+                <field name="date_start"/>
+                <field name="date_end"/>
+                <field name="external_ref" optional="show"/>
+                <field name="amount_total" sum="Total" widget="monetary" optional="show"/>
+                <field name="currency_id" column_invisible="True"/>
+                <field name="state" widget="badge"
+                    decoration-info="state == 'confirmed'"
+                    decoration-warning="state == 'checked_in'"
+                    decoration-success="state == 'done'"
+                    decoration-muted="state == 'cancelled'"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_fav_booking_form" model="ir.ui.view">
+        <field name="name">fav.booking.form</field>
+        <field name="model">fav.booking</field>
+        <field name="arch" type="xml">
+            <form string="Booking">
+                <header>
+                    <button name="action_confirm" type="object" string="Confirm"
+                        class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_check_in" type="object" string="Check In"
+                        class="btn-primary" invisible="state != 'confirmed'"/>
+                    <button name="action_done" type="object" string="Done"
+                        class="btn-primary" invisible="state != 'checked_in'"/>
+                    <button name="action_create_sale_order" type="object" string="Create Sales Order"
+                        groups="sales_team.group_sale_salesman"
+                        invisible="sale_order_id or state in ('draft', 'cancelled')"/>
+                    <button name="action_cancel" type="object" string="Cancel"
+                        invisible="state not in ('draft', 'confirmed', 'checked_in')"/>
+                    <button name="action_draft" type="object" string="Reset to Draft"
+                        invisible="state != 'cancelled'"/>
+                    <field name="state" widget="statusbar"
+                        statusbar_visible="draft,confirmed,checked_in,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_sale_order" type="object"
+                            class="oe_stat_button" icon="fa-pencil-square-o"
+                            invisible="not sale_order_id"
+                            groups="sales_team.group_sale_salesman">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">Sales Order</span>
+                            </div>
+                        </button>
+                        <button name="action_open_pos_order" type="object"
+                            class="oe_stat_button" icon="fa-shopping-cart"
+                            invisible="not pos_order_id"
+                            groups="point_of_sale.group_pos_user">
+                            <div class="o_stat_info">
+                                <span class="o_stat_text">POS Order</span>
+                            </div>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Cancelled" bg_color="text-bg-danger"
+                        invisible="state != 'cancelled'"/>
+                    <div class="oe_title">
+                        <h1><field name="name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="partner_id"/>
+                            <field name="product_id"/>
+                            <field name="external_ref"/>
+                        </group>
+                        <group>
+                            <field name="date_start"/>
+                            <field name="date_end"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                    </group>
+                    <group string="Amounts">
+                        <field name="amount_untaxed"/>
+                        <field name="amount_tax"/>
+                        <field name="amount_total"/>
+                    </group>
+                    <group string="Links">
+                        <field name="sale_order_id" groups="sales_team.group_sale_salesman"/>
+                        <field name="pos_order_id" groups="point_of_sale.group_pos_user"/>
+                    </group>
+                    <group>
+                        <field name="note" placeholder="Notes from the website or the desk"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_fav_booking_search" model="ir.ui.view">
+        <field name="name">fav.booking.search</field>
+        <field name="model">fav.booking</field>
+        <field name="arch" type="xml">
+            <search string="Bookings">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="product_id"/>
+                <field name="external_ref"/>
+                <filter name="filter_draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="filter_confirmed" string="Confirmed" domain="[('state', '=', 'confirmed')]"/>
+                <filter name="filter_checked_in" string="Checked In" domain="[('state', '=', 'checked_in')]"/>
+                <filter name="filter_open" string="Open"
+                    domain="[('state', 'in', ('draft', 'confirmed', 'checked_in'))]"/>
+                <separator/>
+                <filter name="filter_date_start" string="Start" date="date_start"/>
+                <group>
+                    <filter name="group_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_product" string="Resource" context="{'group_by': 'product_id'}"/>
+                    <filter name="group_partner" string="Customer" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_start" string="Start" context="{'group_by': 'date_start'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_fav_booking" model="ir.actions.act_window">
+        <field name="name">Bookings</field>
+        <field name="res_model">fav.booking</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_fav_booking_search"/>
+        <field name="context">{'search_default_filter_open': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No bookings yet
+            </p>
+            <p>
+                Confirmed bookings arrive from the website, or you can record one here.
+            </p>
+        </field>
+    </record>
+</odoo>
