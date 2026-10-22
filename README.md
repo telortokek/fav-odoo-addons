@@ -2,7 +2,7 @@
 
 Custom addons for [FAV](https://github.com/telortokek/fav-odoo-addons), a rental business that also sells food and beverages on site. Odoo Community is the system of record for POS, the F&B menu, inventory, sales, and invoicing. The booking website stays the customer-facing front and pushes confirmed bookings into Odoo.
 
-Odoo itself is not in this repository. Local development runs the official `odoo` image. The series is **20.0 Community**. Change it in `.env` (`ODOO_VERSION`) and keep the module version prefix (`20.0.x.y.z` in `fav_booking/__manifest__.py`) on the same series.
+Odoo itself is not in this repository. Local development runs the official `odoo` image. The series is **20.0 Community**. Change it in `.env` (`ODOO_VERSION`) and keep the module version prefix (`20.0.x.y.z` in each `__manifest__.py`) on the same series.
 
 ## Architecture
 
@@ -45,6 +45,8 @@ docker compose up -d
 Open <http://localhost:8069>. The database manager password in `config/odoo.conf` is `admin` for local development. Change `admin_passwd` before this port is reachable from anywhere else.
 
 Create a database (demo data is optional). Then install **FAV Booking** from Apps. Activate developer mode and use **Update Apps List** if the module is not listed yet. The app depends on Sales and Point of Sale; installing it installs those too.
+
+Install **FAV POS Room Names** (`fav_pos_room`) as well when the till runs in restaurant mode. It depends on Restaurant (`pos_restaurant`) and does not depend on FAV Booking, so a booking-only database does not have to load the floor plan.
 
 To initialize a database from the command line instead of the manager UI:
 
@@ -116,10 +118,38 @@ A successful body looks like:
 
 `created` is `false` when `external_ref` already existed. Status values are `draft`, `confirmed`, `checked_in`, `done`, and `cancelled`.
 
+## Room names on the POS floor
+
+FAV uses each restaurant table as a rental room. Odoo 20 only stores an integer `table_number`, so the floor plan and tickets would show `1`, `2`, and so on. `fav_pos_room` adds **Room Name** on `restaurant.table`.
+
+Set it under **Point of Sale → Configuration → Floor Plans**. Open the floor and edit the **Room Name** column on the table list (the table form has the same field). Leave it empty to keep showing the table number.
+
+The name is what the POS shows on:
+
+- floor-plan tiles, including the floor editor
+- the order header (the badge next to the register)
+- the order list badge, which can also be searched by room name
+- the customer receipt and the kitchen / preparation ticket
+
+Combined tables join each room name with ` & `. A name that is only spaces is treated as empty.
+
+After changing a name, **reload the Point of Sale** (close it and open it again, or reload the page). The POS reads `room_name` when it loads its data, so a session that is already open keeps the previous labels until that reload.
+
+On install, blank tables on a floor named exactly `FAV Setiabudi` are filled from the current layout, matched by table number, not by database id:
+
+| Number | Room name |
+| --- | --- |
+| 1–5 | VIP PLUS 1–5 |
+| 6–7 | VVIP 1–2 |
+| 8–9 | DELUXE 1–2 |
+| 10 | SUITE 1 |
+
+A table that already has a room name is left as it is. Tables created later on that floor get the same default when Room Name is left empty. Other floors are ignored. The fill does not run again on module upgrade, so clearing a name afterwards keeps the table number on screen. If the floor did not exist yet at install time, set the names on the floor form, or create the tables on that floor and leave Room Name empty so the default is applied.
+
 ## Tests
 
 ```bash
-docker compose run --rm odoo -d fav_ci -i fav_booking --without-demo=all --stop-after-init --test-enable --test-tags /fav_booking
+docker compose run --rm odoo -d fav_ci -i fav_booking,fav_pos_room --without-demo=all --stop-after-init --test-enable --test-tags /fav_booking,/fav_pos_room
 ```
 
 GitHub Actions runs flake8 and this install.
