@@ -1,4 +1,9 @@
 id,name,model_id,group_id/id,operation,domain
-access_fav_booking_user,fav.booking user,fav.booking,fav_booking.group_fav_booking_user,cru,
-access_fav_booking_manager,fav.booking manager,fav.booking,fav_booking.group_fav_booking_manager,crud,
+access_fav_booking_user,fav.booking user,fav.booking,fav_booking.group_fav_booking_user,ru,
+access_fav_booking_manager,fav.booking manager,fav.booking,fav_booking.group_fav_booking_manager,rud,
 fav_booking_company_rule,FAV booking multi-company,fav.booking,,crud,"[('company_id', 'in', company_ids)]"
+access_fav_room_user,fav.room user,fav.room,fav_booking.group_fav_booking_user,r,
+access_fav_room_manager,fav.room manager,fav.room,fav_booking.group_fav_booking_manager,crud,
+fav_room_company_rule,FAV room multi-company,fav.room,,crud,"[('company_id', 'in', company_ids)]"
+access_restaurant_table_fav_user,restaurant.table fav booking,restaurant.table,fav_booking.group_fav_booking_user,r,
+access_restaurant_floor_fav_user,restaurant.floor fav booking,restaurant.floor,fav_booking.group_fav_booking_user,r,

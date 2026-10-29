@@ -7,31 +7,30 @@ Odoo itself is not in this repository. Local development runs the official `odoo
 ## Architecture
 
 ```
-booking website                    Odoo
----------------                    ----
-customer picks a slot
+booking website                         Odoo
+----------------                         ----
+customer or walk-in books in the app
         |
         |  POST /fav/api/booking/upsert
         |  Authorization: Bearer <API key>
         v
                                  fav.booking  (draft → confirmed)
+                                 matched to fav.room
                                         |
-                                        |  guest arrives
+                                        |  guest arrives, staff press Check In
                                         v
-                                 cashier opens a POS session,
-                                 adds F&B, links pos.order
-                                 on the booking
-                                        |
-                                        v
-                                 sale.order / invoice when the
-                                 rental charge is billed in Sales
+                                 draft pos.order on that room's table
+                                 (room hours, minus website down payment)
+                                 cashier adds F&B on the same bill
 ```
 
 Loyverse remains in use until products, customers, and stock have been loaded into Odoo. The Google Sheet used for manual booking checks is replaced by `fav.booking` once the website calls this API.
 
+The website is the only place a booking is created, including walk-ins. Staff can open the calendar, confirm, and check a guest in. The Booking list, form, calendar, and kanban do not offer **New**, and the access rights have no create permission. `upsert_from_website` is the creator: it checks that the caller may write bookings, then creates the record with `sudo()`.
+
 `external_ref` is the website's idempotency key. Repeating the same reference updates a draft or confirmed booking and returns the same record. It does not create a second booking. After check-in, schedule and amount fields stay as they are. A retry that still says `confirmed` does not rewind a booking that staff have already checked in.
 
-Point of Sale orders are created in an open POS session, where the cashier adds food and beverages. The booking form stores the link. A **Create Sales Order** button on a confirmed booking opens a draft sales order for the rental product when the charge should go through Sales and invoicing.
+**Check In** on a confirmed booking opens a draft POS order on the room's table in the open session of the POS config linked to that table's floor. The cashier reloads the Point of Sale (or receives the sync) and the bill is already on the table. A **Create Sales Order** button still opens a draft sales order when the rental should also be invoiced from Sales.
 
 ## Run locally
 
@@ -44,9 +43,14 @@ docker compose up -d
 
 Open <http://localhost:8069>. The database manager password in `config/odoo.conf` is `admin` for local development. Change `admin_passwd` before this port is reachable from anywhere else.
 
-Create a database (demo data is optional). Then install **FAV Booking** from Apps. Activate developer mode and use **Update Apps List** if the module is not listed yet. The app depends on Sales and Point of Sale; installing it installs those too.
+Create a database (demo data is optional). Then install **FAV Booking** from Apps. Activate developer mode and use **Update Apps List** if the module is not listed yet. The app depends on Sales and on **FAV POS Room Names**, which installs Restaurant and Point of Sale.
 
-Install **FAV POS Room Names** (`fav_pos_room`) as well when the till runs in restaurant mode. It depends on Restaurant (`pos_restaurant`) and does not depend on FAV Booking, so a booking-only database does not have to load the floor plan.
+Upgrade an existing database with:
+
+```bash
+docker compose run --rm odoo -d fav -u fav_booking --stop-after-init
+docker compose up -d
+```
 
 To initialize a database from the command line instead of the manager UI:
 
@@ -77,18 +81,46 @@ curl -sS -X POST http://localhost:8069/fav/api/booking/upsert \
   -d '{
     "external_ref": "WEB-1001",
     "partner": {"name": "Ayu", "email": "ayu@example.com", "phone": "081234"},
+    "room_code": "VIP-PLUS-1",
     "product_code": "COURT-HOUR",
     "date_start": "2026-10-20 02:00:00",
     "date_end": "2026-10-20 04:00:00",
     "state": "confirmed",
-    "amount_untaxed": 150000,
+    "amount_untaxed": 300000,
     "amount_tax": 0,
-    "amount_total": 150000,
+    "amount_total": 300000,
+    "amount_down_payment": 50000,
     "note": "Online"
   }'
 ```
 
-`product_id` may be sent instead of `product_code`, and `partner_id` instead of `partner`. The resource is a normal product (`product.product`) with an internal reference. Create the rentable units (courts, rooms, slots) as products before the website calls the API.
+`product_id` may be sent instead of `product_code`, and `partner_id` instead of `partner`. `room_code` (or `room_id`) selects a room configured under **FAV → Configuration → Rooms**. That room's product becomes the booking product. A `product_code` that matches a room code does the same, so older callers that sent the room code as the product reference still resolve. When no room matches, the product is used on its own and check-in cannot open a table.
+
+## Rooms, calendar, and check-in
+
+**FAV → Configuration → Rooms** links three things:
+
+- a **room code** the website sends
+- a **POS table** (`restaurant.table`, whose floor-plan name comes from `fav_pos_room`)
+- a **product** that is available in the Point of Sale and priced per hour
+
+Do not put the hourly price on the room. Change it on the product.
+
+**FAV → Bookings** opens on a calendar coloured by room. The same action has a list and a kanban grouped by room. Odoo Community has no Gantt view (`web_gantt` is Enterprise), so the calendar plus the kanban is the schedule. Two bookings for the same room cannot overlap unless one is cancelled. A booking that ends when the next one starts is allowed.
+
+**Check In** requires a room on a floor, and exactly one POS session in state **opened** for a register linked to that floor. It also refuses the click when that table already has a draft order. The new order is `state=draft`, on that `table_id`, with the customer. The room line quantity is the number of hours between start and end. The unit price is the POS pricelist price (the product list price when the register has no pricelist).
+
+`amount_down_payment` is optional. When it is greater than zero, check-in adds a second line on the same product with a negative unit price, no taxes, `price_type=manual`, and the label **Down payment**. The credit is the exact amount collected. It is not grossed up by the room product's taxes, and `pos.payment` stays empty, so the register does not expect that money in the drawer. A negative down payment, or one larger than the room charge on the bill, is rejected.
+
+Reload the Point of Sale after check-in. Draft orders for that register are part of the data the POS loads (`pos.order` domain `state = draft` and this config). Check-in also sends the register a synchronisation message so a session that is already open can pick the bill up without a full reload.
+
+## Manual check
+
+1. Upgrade with `-u fav_booking` (command above) and open a restaurant POS session.
+2. Create a room: code `VIP-PLUS-1`, the POS table for that room, and an hourly product available in POS.
+3. Send the upsert sample with `room_code` `VIP-PLUS-1`. The booking is confirmed and has no **New** button in the UI.
+4. Open the booking and press **Check In**.
+5. Reload the POS. The table shows an open bill: hours of the room product, and a Down payment line when `amount_down_payment` was sent.
 
 The same body works on Odoo's JSON-2 API, which is the supported external RPC in Odoo 20:
 
@@ -154,16 +186,18 @@ docker compose run --rm odoo -d fav_ci -i fav_booking,fav_pos_room --without-dem
 
 GitHub Actions runs flake8 and this install.
 
-## Odoo 20 notes that shaped the module
+## Technical notes
 
-Checked against the 20.0 sources:
+Checked against the Odoo 20.0 sources:
 
-- List views use `<list>`, and window actions use `view_mode` `list,form`. `<tree>` is the old name.
-- Access rights are `ir.access` records in `security/ir.access.csv` (`model`, group external id, operation such as `cru` / `crud`, optional domain). `ir.model.access` and the old `perm_read` columns are gone. An empty group is a restriction; the multi-company line uses that.
-- Groups hang off `res.groups.privilege` (`privilege_id`), not `category_id` on `res.groups`. Users are `user_ids`.
-- SQL constraints are `models.Constraint` attributes. `_sql_constraints` is gone.
+- List views use `<list>`, and window actions use `view_mode`. `<tree>` is the old name. Bookings default to `calendar,list,kanban,form`.
+- Access rights are `ir.access` records in `security/ir.access.csv` (`model`, group external id, operation such as `ru` / `rud`, optional domain). `ir.model.access` and the old `perm_read` columns are gone. An empty group is a restriction; the multi-company lines use that. Booking users and administrators have no `c` (create) on `fav.booking`.
+- Groups hang off `res.groups.privilege` (`privilege_id`), not `category_id` on `res.groups`. Users are `user_ids` / `group_ids`.
+- SQL constraints are `models.Constraint` attributes. `_sql_constraints` is gone. Room overlap is a Python constraint (cancelled bookings excluded) plus `SELECT … FOR UPDATE` on the room row. Community does not ship `web_gantt`.
 - HTTP JSON routes are `type='jsonrpc'` (the old `type='json'`) or `type='json2'` for a plain JSON body. This module's endpoint is `json2`.
 - API keys are bearer tokens. Scope `rpc` is what `auth='bearer'` checks. Keys expire; plan rotation.
+- A draft `pos.order` with `table_id` set is the open bill. The POS loads it when `state` is `draft` and `config_id` is the register (`pos.order._load_pos_data_domain`). Check-in also calls `pos.config._notify_synchronisation` for `pos.order` and `pos.order.line`.
+- The down payment is a negative `pos.order.line` with no taxes (`price_type=manual`), not a `pos.payment`. A payment line would be counted in the session (cash, bank, or customer account) even though the website took the money outside the register. Leaving the product's taxes on that line would also turn a 100,000 collection into a larger credit.
 
 ## Next steps
 

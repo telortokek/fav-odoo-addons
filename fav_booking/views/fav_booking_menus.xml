@@ -8,5 +8,14 @@
             name="Bookings"
             action="action_fav_booking"
             sequence="10"/>
+        <menuitem id="menu_fav_config"
+            name="Configuration"
+            sequence="90"
+            groups="fav_booking.group_fav_booking_manager">
+            <menuitem id="menu_fav_room"
+                name="Rooms"
+                action="action_fav_room"
+                sequence="10"/>
+        </menuitem>
     </menuitem>
 </odoo>

@@ -1,6 +1,8 @@
 from odoo.exceptions import UserError, ValidationError
 from odoo.tests import TransactionCase
 
+from odoo.addons.fav_booking.tests.common import open_restaurant_session
+
 
 class TestFavBooking(TransactionCase):
 
@@ -57,13 +59,29 @@ class TestFavBooking(TransactionCase):
         )
 
     def test_stale_confirm_does_not_rewind_check_in(self):
+        self.product.available_in_pos = True
+        floor = self.env['restaurant.floor'].create({'name': 'FAV Stale Floor'})
+        table = self.env['restaurant.table'].create({
+            'floor_id': floor.id,
+            'table_number': 1,
+            'room_name': 'Court 1',
+        })
+        self.env['fav.room'].create({
+            'name': 'Court 1',
+            'code': 'FAV-TEST-COURT',
+            'table_id': table.id,
+            'product_id': self.product.id,
+        })
+        open_restaurant_session(self.env, floor, name='FAV Stale Register')
         result = self.env['fav.booking'].upsert_from_website(**self.payload)
         booking = self.env['fav.booking'].browse(result['id'])
+        self.assertTrue(booking.room_id)
         booking.action_check_in()
         replay = self.env['fav.booking'].upsert_from_website(**self.payload)
         self.assertEqual(replay['id'], booking.id)
         self.assertEqual(booking.state, 'checked_in')
         self.assertFalse(replay['created'])
+        self.assertTrue(booking.pos_order_id)
 
     def test_end_before_start_is_rejected(self):
         payload = dict(self.payload, external_ref='WEB-BAD', date_end='2026-10-20 01:00:00')
