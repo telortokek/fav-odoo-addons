@@ -20,7 +20,7 @@ customer or walk-in books in the app
                                         |  guest arrives, staff press Check In
                                         v
                                  draft pos.order on that room's table
-                                 (room hours, minus website down payment)
+                                 (room hours, minus what was paid on the website)
                                  cashier adds F&B on the same bill
 ```
 
@@ -89,7 +89,7 @@ curl -sS -X POST http://localhost:8069/fav/api/booking/upsert \
     "amount_untaxed": 300000,
     "amount_tax": 0,
     "amount_total": 300000,
-    "amount_down_payment": 50000,
+    "amount_paid": 300000,
     "note": "Online"
   }'
 ```
@@ -110,7 +110,7 @@ Do not put the hourly price on the room. Change it on the product.
 
 **Check In** requires a room on a floor, and exactly one POS session in state **opened** for a register linked to that floor. It also refuses the click when that table already has a draft order. The new order is `state=draft`, on that `table_id`, with the customer. The room line quantity is the number of hours between start and end. The unit price is the POS pricelist price (the product list price when the register has no pricelist).
 
-`amount_down_payment` is optional. When it is greater than zero, check-in adds a second line on the same product with a negative unit price, no taxes, `price_type=manual`, and the label **Down payment**. The credit is the exact amount collected. It is not grossed up by the room product's taxes, and `pos.payment` stays empty, so the register does not expect that money in the drawer. A negative down payment, or one larger than the room charge on the bill, is rejected.
+Bookings are usually paid in full on the website. Send `amount_paid` (the form field is **Payment**). `amount_down_payment` is still accepted and stored under that technical name; if both are sent, `amount_paid` wins. When the amount is greater than zero, check-in adds a second line on the same product with a negative unit price, no taxes, `price_type=manual`, the name **Website payment**, and the note **Paid on website for** the booking number. The credit is the exact amount collected, so a payment equal to the room charge on the bill leaves a zero total. It is not a `pos.payment`, so the register does not expect that money in the drawer. A negative payment, or one larger than the room charge, is rejected.
 
 Reload the Point of Sale after check-in. Draft orders for that register are part of the data the POS loads (`pos.order` domain `state = draft` and this config). Check-in also sends the register a synchronisation message so a session that is already open can pick the bill up without a full reload.
 
@@ -120,7 +120,7 @@ Reload the Point of Sale after check-in. Draft orders for that register are part
 2. Create a room: code `VIP-PLUS-1`, the POS table for that room, and an hourly product available in POS.
 3. Send the upsert sample with `room_code` `VIP-PLUS-1`. The booking is confirmed and has no **New** button in the UI.
 4. Open the booking and press **Check In**.
-5. Reload the POS. The table shows an open bill: hours of the room product, and a Down payment line when `amount_down_payment` was sent.
+5. Reload the POS. The table shows an open bill: hours of the room product, and a **Website payment** line when `amount_paid` was sent.
 
 The same body works on Odoo's JSON-2 API, which is the supported external RPC in Odoo 20:
 
@@ -197,7 +197,7 @@ Checked against the Odoo 20.0 sources:
 - HTTP JSON routes are `type='jsonrpc'` (the old `type='json'`) or `type='json2'` for a plain JSON body. This module's endpoint is `json2`.
 - API keys are bearer tokens. Scope `rpc` is what `auth='bearer'` checks. Keys expire; plan rotation.
 - A draft `pos.order` with `table_id` set is the open bill. The POS loads it when `state` is `draft` and `config_id` is the register (`pos.order._load_pos_data_domain`). Check-in also calls `pos.config._notify_synchronisation` for `pos.order` and `pos.order.line`.
-- The down payment is a negative `pos.order.line` with no taxes (`price_type=manual`), not a `pos.payment`. A payment line would be counted in the session (cash, bank, or customer account) even though the website took the money outside the register. Leaving the product's taxes on that line would also turn a 100,000 collection into a larger credit.
+- Website money is stored on `fav.booking.amount_down_payment` (form label **Payment**). The API accepts `amount_paid`, which wins when both are sent, and still accepts `amount_down_payment`. Check-in posts a negative untaxed `pos.order.line` named **Website payment** (`price_type=manual`), capped at the room charge on the bill. It is not a `pos.payment`: a payment record would be counted in the session (cash, bank, or customer account) even though the website took the money outside the register. Putting the room product's taxes on that line would also turn a 100,000 collection into a larger credit.
 
 ## Next steps
 

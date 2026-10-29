@@ -68,6 +68,28 @@ class TestFavRoomCheckIn(TransactionCase):
         values.update(extra)
         return values
 
+    def test_amount_paid_alias_wins_over_amount_down_payment(self):
+        payload = self._payload(
+            external_ref='WEB-PAID-ALIAS',
+            amount_down_payment=50000.0,
+            amount_paid=80000.0,
+        )
+        result = self.env['fav.booking'].upsert_from_website(**payload)
+        booking = self.env['fav.booking'].browse(result['id'])
+        self.assertEqual(booking.amount_down_payment, 80000.0)
+        self.assertEqual(result['amount_paid'], 80000.0)
+        self.assertEqual(result['amount_down_payment'], 80000.0)
+        legacy = self._payload(
+            external_ref='WEB-PAID-LEGACY',
+            amount_paid=None,
+            date_start='2026-10-20 06:00:00',
+            date_end='2026-10-20 08:00:00',
+        )
+        legacy_booking = self.env['fav.booking'].browse(
+            self.env['fav.booking'].upsert_from_website(**legacy)['id']
+        )
+        self.assertEqual(legacy_booking.amount_down_payment, 50000.0)
+
     def test_room_code_sets_the_mapped_product(self):
         result = self.env['fav.booking'].upsert_from_website(**self._payload())
         booking = self.env['fav.booking'].browse(result['id'])
@@ -165,7 +187,9 @@ class TestFavRoomCheckIn(TransactionCase):
         self.assertEqual(room_line.qty, 2.0)
         self.assertEqual(room_line.product_id, self.product)
         self.assertEqual(room_line.price_unit, 150000)
-        self.assertEqual(deposit_line.full_product_name, 'Down payment')
+        self.assertEqual(deposit_line.full_product_name, 'Website payment')
+        self.assertIn('Paid on website for', deposit_line.customer_note or '')
+        self.assertFalse(deposit_line.tax_ids)
         self.assertEqual(deposit_line.price_unit, -50000)
         self.assertFalse(order.payment_ids)
         # Untaxed remainder is 2 × 150000 − 50000. Tax, if the product has any, sits on top.
@@ -174,6 +198,53 @@ class TestFavRoomCheckIn(TransactionCase):
             self.env['pos.order']._load_pos_data_domain({'pos.config': config})
         )
         self.assertIn(order, loaded)
+
+    def test_full_website_payment_nets_the_room_charge_to_zero(self):
+        open_restaurant_session(self.env, self.floor, name='FAV Paid In Full Register')
+        sample = self.env['fav.booking'].browse(
+            self.env['fav.booking'].upsert_from_website(**self._payload(
+                external_ref='WEB-CHARGE-SAMPLE',
+                amount_paid=0,
+            ))['id']
+        )
+        sample.action_check_in()
+        room_charge = sample.pos_order_id.amount_total
+        self.assertGreater(room_charge, 0)
+        over = self.env['fav.booking'].browse(
+            self.env['fav.booking'].upsert_from_website(**self._payload(
+                external_ref='WEB-PAID-OVER',
+                room_code='FAV-TEST-ROOM-2',
+                date_start='2026-10-21 02:00:00',
+                date_end='2026-10-21 04:00:00',
+                amount_paid=room_charge + 1,
+            ))['id']
+        )
+        with self.assertRaises(UserError) as error:
+            over.action_check_in()
+        self.assertIn('payment', str(error.exception).lower())
+        self.assertIn('room charge', str(error.exception).lower())
+        self.assertFalse(over.pos_order_id)
+        self.assertFalse(self.env['pos.order'].search([
+            ('table_id', '=', self.other_table.id),
+            ('state', '=', 'draft'),
+        ]))
+        paid = self.env['fav.booking'].browse(
+            self.env['fav.booking'].upsert_from_website(**self._payload(
+                external_ref='WEB-PAID-FULL',
+                room_code='FAV-TEST-ROOM-2',
+                amount_paid=room_charge,
+                amount_down_payment=1,
+            ))['id']
+        )
+        paid.action_check_in()
+        order = paid.pos_order_id
+        credit = order.lines.filtered(lambda line: line.price_unit < 0)
+        self.assertEqual(credit.full_product_name, 'Website payment')
+        self.assertIn('Paid on website for', credit.customer_note or '')
+        self.assertEqual(credit.price_unit, -room_charge)
+        self.assertFalse(credit.tax_ids)
+        self.assertEqual(order.amount_total, 0)
+        self.assertFalse(order.payment_ids)
 
     def test_check_in_requires_an_open_session(self):
         booking = self.env['fav.booking'].browse(

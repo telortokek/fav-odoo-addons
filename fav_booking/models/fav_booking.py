@@ -131,11 +131,11 @@ class FavBooking(models.Model):
         check_company=True,
     )
     amount_down_payment = fields.Monetary(
-        string='Down Payment',
+        string='Payment',
         tracking=True,
-        help='Collected on the website before the guest arrives. '
-             'Check-in posts it as a negative line on the open POS bill, '
-             'not as cash taken in the POS session.',
+        help='Amount already paid on the website. '
+             'Check-in adds it as a negative line on the open POS bill, '
+             'not as cash taken in the register.',
     )
     duration_hours = fields.Float(
         string='Hours',
@@ -295,6 +295,7 @@ class FavBooking(models.Model):
         amount_tax=0.0,
         amount_total=None,
         amount_down_payment=0.0,
+        amount_paid=None,
         note=None,
         company_id=None,
     ):
@@ -311,6 +312,7 @@ class FavBooking(models.Model):
         needs Contact Creation (Settings / partner manager).
         """
         self.check_access('write')
+        amount_down_payment = self._website_payment_amount(amount_paid, amount_down_payment)
         external_ref = (external_ref or '').strip()
         if not external_ref:
             raise UserError(self.env._('external_ref is required.'))
@@ -422,6 +424,13 @@ class FavBooking(models.Model):
             'company_id': company.id,
             'currency_id': company.currency_id.id,
         }
+
+    @api.model
+    def _website_payment_amount(self, amount_paid, amount_down_payment):
+        """Prefer ``amount_paid`` when the caller sent it, including zero."""
+        if amount_paid is not None:
+            return amount_paid or 0.0
+        return amount_down_payment or 0.0
 
     @api.model
     def _amount_total(self, amount_untaxed, amount_tax, amount_total):
@@ -537,10 +546,10 @@ class FavBooking(models.Model):
         """Create the draft bill for this booking on its POS table.
 
         The room line quantity is the booked hours at the product's POS price.
-        A website down payment is a second line with a negative unit price and
-        ``price_type`` ``manual``. It reduces the amount still due. It is not a
-        ``pos.payment``, so the register's counted cash does not include money
-        the website already collected.
+        Money already paid on the website is a second line with a negative unit
+        price, no taxes, and ``price_type`` ``manual``. It reduces the amount
+        still due. It is not a ``pos.payment``, so the register's counted cash
+        does not include money the website already collected.
         """
         self.ensure_one()
         if not self.room_id:
@@ -584,9 +593,9 @@ class FavBooking(models.Model):
 
         product = room.product_id
         price = self._hourly_price(session.config_id, product, hours)
-        down_payment = self.amount_down_payment or 0.0
-        if self.currency_id.compare_amounts(down_payment, 0) < 0:
-            raise UserError(self.env._('The down payment cannot be negative.'))
+        website_payment = self.amount_down_payment or 0.0
+        if self.currency_id.compare_amounts(website_payment, 0) < 0:
+            raise UserError(self.env._('The payment cannot be negative.'))
 
         taxes = product.taxes_id.filtered_domain(
             self.env['account.tax']._check_company_domain(self.company_id)
@@ -606,16 +615,17 @@ class FavBooking(models.Model):
             ))],
         })
         self._recompute_pos_amounts(order)
-        if self.currency_id.compare_amounts(down_payment, 0) > 0:
-            if self.currency_id.compare_amounts(down_payment, order.amount_total) > 0:
+        if self.currency_id.compare_amounts(website_payment, 0) > 0:
+            if self.currency_id.compare_amounts(website_payment, order.amount_total) > 0:
+                order.unlink()
                 raise UserError(self.env._(
-                    'The down payment is higher than the room charge on the bill.',
+                    'The payment is higher than the room charge on the bill.',
                 ))
             # No taxes: this is cash already collected, not another sale of the room.
             self.env['pos.order.line'].sudo().create(self._pos_line_vals(
-                product, 1.0, -down_payment, self.env['account.tax'],
-                self.env._('Down payment'),
-                self.env._('Website down payment for %s', self.name),
+                product, 1.0, -website_payment, self.env['account.tax'],
+                self.env._('Website payment'),
+                self.env._('Paid on website for %s', self.name),
             ) | {'order_id': order.id})
             self._recompute_pos_amounts(order)
         self.pos_order_id = order
@@ -713,6 +723,7 @@ class FavBooking(models.Model):
             'amount_tax': self.amount_tax,
             'amount_total': self.amount_total,
             'amount_down_payment': self.amount_down_payment,
+            'amount_paid': self.amount_down_payment,
             'currency_id': self.currency_id.id,
             'pos_order_id': self.pos_order_id.id or False,
             'sale_order_id': self.sale_order_id.id or False,

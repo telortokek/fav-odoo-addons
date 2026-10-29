@@ -28,6 +28,7 @@ class FavBookingController(http.Controller):
         amount_tax=0.0,
         amount_total=None,
         amount_down_payment=0.0,
+        amount_paid=None,
         note=None,
         company_id=None,
     ):
@@ -51,6 +52,7 @@ class FavBookingController(http.Controller):
             amount_tax=amount_tax,
             amount_total=amount_total,
             amount_down_payment=amount_down_payment,
+            amount_paid=amount_paid,
             note=note,
             company_id=company_id,
         )
