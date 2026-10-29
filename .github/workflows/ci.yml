@@ -17,21 +17,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install flake8
-          python -m compileall -q fav_booking fav_pos_room
-          flake8 fav_booking fav_pos_room
+          python -m compileall -q fav_booking fav_pos_room fav_pos_analytic
+          flake8 fav_booking fav_pos_room fav_pos_analytic
 
   install:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Install fav_booking and fav_pos_room on a fresh database
+      - name: Install fav_booking, fav_pos_room, and fav_pos_analytic on a fresh database
         run: |
           docker compose run --rm odoo \
             -d fav_ci \
-            -i fav_booking,fav_pos_room \
+            -i fav_booking,fav_pos_room,fav_pos_analytic \
             --without-demo=all \
             --stop-after-init \
             --test-enable \
-            --test-tags /fav_booking,/fav_pos_room \
+            --test-tags /fav_booking,/fav_pos_room,/fav_pos_analytic \
             --http-port=8079

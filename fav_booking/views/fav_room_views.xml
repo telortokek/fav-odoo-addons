@@ -35,6 +35,7 @@
                             <field name="room_type"/>
                             <field name="sequence"/>
                             <field name="floor_id"/>
+                            <field name="outlet_analytic_account_id"/>
                             <field name="active" invisible="1"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>

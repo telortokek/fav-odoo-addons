@@ -43,7 +43,7 @@ docker compose up -d
 
 Open <http://localhost:8069>. The database manager password in `config/odoo.conf` is `admin` for local development. Change `admin_passwd` before this port is reachable from anywhere else.
 
-Create a database (demo data is optional). Then install **FAV Booking** from Apps. Activate developer mode and use **Update Apps List** if the module is not listed yet. The app depends on Sales and on **FAV POS Room Names**, which installs Restaurant and Point of Sale.
+Create a database (demo data is optional). Then install **FAV Booking** and **FAV POS Outlet Analytic** from Apps. Activate developer mode and use **Update Apps List** if a module is not listed yet. Booking depends on Sales and on **FAV POS Room Names**, which installs Restaurant and Point of Sale. Outlet analytic depends on Point of Sale.
 
 Upgrade an existing database with:
 
@@ -178,10 +178,24 @@ On install, blank tables on a floor named exactly `FAV Setiabudi` are filled fro
 
 A table that already has a room name is left as it is. Tables created later on that floor get the same default when Room Name is left empty. Other floors are ignored. The fill does not run again on module upgrade, so clearing a name afterwards keeps the table number on screen. If the floor did not exist yet at install time, set the names on the floor form, or create the tables on that floor and leave Room Name empty so the default is applied.
 
+## Outlet analytic on the POS
+
+Odoo 20 Community does not put an analytic account on the register. **FAV POS Outlet Analytic** adds **Outlet analytic account** on `pos.config`.
+
+Create the accounts once, under **Accounting → Configuration → Analytic Accounting** (developer mode is not required for these menus once Accounting is installed):
+
+1. Create an analytic plan named `Outlet`.
+2. On that plan, create one analytic account per outlet. FAV uses `FAV Setiabudi` with code `SBD`, and `FAV Tenun` with code `TNN`. The module does not create these records.
+3. Open **Point of Sale → Configuration → Settings**, select the register, and under **Accounting** set **Outlet analytic account**. The same field is on the register form, Configuration page.
+
+When that register closes a session, the closing journal entry gets `analytic_distribution` `{account: 100}` on every income line and on discount and other profit-and-loss lines (expense, depreciation, and cost of goods). Receivable, bank, cash, and tax lines are left untagged. An invoice created from a POS order gets the same distribution on its product lines.
+
+A room shows **Outlet analytic account** when its floor is linked to a register that has one. That value is computed. It is not a second place to edit the account.
+
 ## Tests
 
 ```bash
-docker compose run --rm odoo -d fav_ci -i fav_booking,fav_pos_room --without-demo=all --stop-after-init --test-enable --test-tags /fav_booking,/fav_pos_room
+docker compose run --rm odoo -d fav_ci -i fav_booking,fav_pos_room,fav_pos_analytic --without-demo=all --stop-after-init --test-enable --test-tags /fav_booking,/fav_pos_room,/fav_pos_analytic
 ```
 
 GitHub Actions runs flake8 and this install.
@@ -198,6 +212,7 @@ Checked against the Odoo 20.0 sources:
 - API keys are bearer tokens. Scope `rpc` is what `auth='bearer'` checks. Keys expire; plan rotation.
 - A draft `pos.order` with `table_id` set is the open bill. The POS loads it when `state` is `draft` and `config_id` is the register (`pos.order._load_pos_data_domain`). Creating a bill also calls `pos.config._notify_synchronisation`. Session open is `pos.session.create` / `write` when `state` becomes `opened` (`_set_opening_control_data` writes that state). The local day uses `res.users.tz`, or `Asia/Jakarta` when the user has none. `date_start` in that zone selects the day. An API change updates the draft bill only when every line is marked `fav_line_role` `room` or `payment`. Extra lines are left in place and noted on the booking. Cancelling or moving the booking off that day cancels an untouched bill. The day schedule is the client action `fav_booking.schedule`.
 - Website money is stored on `fav.booking.amount_down_payment` (form label **Payment**). The API accepts `amount_paid`, which wins when both are sent, and still accepts `amount_down_payment`. Check-in posts a negative untaxed `pos.order.line` named **Website payment** (`price_type=manual`), capped at the room charge on the bill. It is not a `pos.payment`: a payment record would be counted in the session (cash, bank, or customer account) even though the website took the money outside the register. Putting the room product's taxes on that line would also turn a 100,000 collection into a larger credit.
+- Outlet analytic is `pos.config.analytic_account_id`. `fav_pos_analytic` writes it after `pos.session._create_session_account_move` and `pos.order._generate_pos_order_invoice` return. Both methods post the move before returning, so cost-of-goods lines created during posting are already on the move. The distribution is a JSON object whose key is the analytic account id as a string and whose value is `100`. Lines are included when `account_id.account_type` is `income`, `income_other`, `expense`, `expense_depreciation`, or `expense_direct_cost`, and `display_type` is not `payment_term`, `tax`, `line_section`, `line_subsection`, or `line_note`. Writing the field on a posted line runs the analytic inverse, which recreates `account.analytic.line`. `fav.room.outlet_analytic_account_id` is a non-stored compute. `fav_booking` does not depend on `fav_pos_analytic`; the field stays empty until that module is installed and a register on the room's floor has an account.
 
 ## Next steps
 

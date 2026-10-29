@@ -29,6 +29,13 @@ class FavRoom(models.Model):
         store=True,
         index=True,
     )
+    outlet_analytic_account_id = fields.Many2one(
+        'account.analytic.account',
+        string='Outlet analytic account',
+        compute='_compute_outlet_analytic_account_id',
+        help='Analytic account of a Point of Sale linked to this outlet, '
+             'when FAV POS Outlet Analytic is installed.',
+    )
     code = fields.Char(
         string='Room Code',
         required=True,
@@ -77,6 +84,18 @@ class FavRoom(models.Model):
                     'Room %(room)s and its product must belong to the same company.',
                     room=room.display_name,
                 ))
+
+    @api.depends('floor_id')
+    def _compute_outlet_analytic_account_id(self):
+        Analytic = self.env['account.analytic.account']
+        configs = self.env['pos.config']
+        has_field = 'analytic_account_id' in configs._fields
+        for room in self:
+            account = Analytic.browse()
+            if has_field and room.floor_id:
+                linked = room.floor_id.pos_config_ids.filtered('analytic_account_id').sorted('id')
+                account = linked[:1].analytic_account_id
+            room.outlet_analytic_account_id = account
 
     @api.depends('name', 'code')
     def _compute_display_name(self):
