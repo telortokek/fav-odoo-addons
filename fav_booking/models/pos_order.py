@@ -11,3 +11,16 @@ class PosOrder(models.Model):
         index=True,
         ondelete='set null',
     )
+
+
+class PosOrderLine(models.Model):
+    _inherit = 'pos.order.line'
+
+    fav_line_role = fields.Selection(
+        selection=[
+            ('room', 'Room'),
+            ('payment', 'Website payment'),
+        ],
+        string='Booking Line',
+        copy=False,
+    )

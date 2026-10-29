@@ -5,7 +5,7 @@ from odoo.exceptions import ValidationError
 class FavRoom(models.Model):
     _name = 'fav.room'
     _description = 'FAV Room'
-    _order = 'name, id'
+    _order = 'sequence, room_type, name, id'
 
     _code_company_uniq = models.Constraint(
         'UNIQUE(code, company_id)',
@@ -17,6 +17,18 @@ class FavRoom(models.Model):
     )
 
     name = fields.Char(required=True, translate=True)
+    sequence = fields.Integer(default=10)
+    room_type = fields.Char(
+        string='Room Type',
+        help='Groups columns on the day schedule, for example VIP PLUS or SUITE.',
+    )
+    floor_id = fields.Many2one(
+        'restaurant.floor',
+        string='Outlet',
+        related='table_id.floor_id',
+        store=True,
+        index=True,
+    )
     code = fields.Char(
         string='Room Code',
         required=True,

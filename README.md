@@ -30,7 +30,7 @@ The website is the only place a booking is created, including walk-ins. Staff ca
 
 `external_ref` is the website's idempotency key. Repeating the same reference updates a draft or confirmed booking and returns the same record. It does not create a second booking. After check-in, schedule and amount fields stay as they are. A retry that still says `confirmed` does not rewind a booking that staff have already checked in.
 
-**Check In** on a confirmed booking opens a draft POS order on the room's table in the open session of the POS config linked to that table's floor. The cashier reloads the Point of Sale (or receives the sync) and the bill is already on the table. A **Create Sales Order** button still opens a draft sales order when the rental should also be invoiced from Sales.
+Opening a POS session creates a draft bill for every confirmed booking on that floor whose start falls on the current local day (the user timezone, or Asia/Jakarta). A booking confirmed through the API while that session is already open gets its bill immediately. Future days stay on the schedule until the register opens that day. The booking becomes **Checked In** when the bill is created. There is no Check In button. If the table already has a draft order, a second bill is still opened and the booking chatter says so. A failure is written on the booking and does not stop the session from opening.
 
 ## Run locally
 
@@ -106,9 +106,9 @@ curl -sS -X POST http://localhost:8069/fav/api/booking/upsert \
 
 Do not put the hourly price on the room. Change it on the product.
 
-**FAV → Bookings** opens on a calendar coloured by room. The same action has a list and a kanban grouped by room. Odoo Community has no Gantt view (`web_gantt` is Enterprise), so the calendar plus the kanban is the schedule. Two bookings for the same room cannot overlap unless one is cancelled. A booking that ends when the next one starts is allowed.
+**FAV → Bookings** opens the day schedule. Time runs down the page in the outlet's slot size (30 minutes by default) from the outlet's opening hour to its closing hour. The default window is 09:00 to 02:00 the next day; set **Schedule Opens**, **Schedule Closes**, and **Schedule Slot** on the floor. Hours past 24 are the next morning, so 26 is 02:00. Rooms are columns, ordered and labelled by room type. Each booking is a block with the customer, time, status colour, and website payment. The view is read-only. Click a block to open the booking; **Bill** opens the POS order when one exists. The outlet selector shows one floor at a time (for example FAV Setiabudi or FAV Rental Tenun) and the browser remembers the last choice. **All Bookings** keeps the calendar, list, and kanban, with an Outlet filter and group-by. Community has no Gantt view. Two bookings for the same room cannot overlap unless one is cancelled. A booking that ends when the next one starts is allowed.
 
-**Check In** requires a room on a floor, and exactly one POS session in state **opened** for a register linked to that floor. It also refuses the click when that table already has a draft order. The new order is `state=draft`, on that `table_id`, with the customer. The room line quantity is the number of hours between start and end. The unit price is the POS pricelist price (the product list price when the register has no pricelist).
+The bill is a draft `pos.order` on the room's table, with the customer. The room line quantity is the number of hours between start and end. The unit price is the POS pricelist price (the product list price when the register has no pricelist). Staff cannot edit the date, room, or payment on the booking form. A draft booking can still be confirmed, which opens today's bill if the register is already open.
 
 Bookings are usually paid in full on the website. Send `amount_paid` (the form field is **Payment**). `amount_down_payment` is still accepted and stored under that technical name; if both are sent, `amount_paid` wins. When the amount is greater than zero, check-in adds a second line on the same product with a negative unit price, no taxes, `price_type=manual`, the name **Website payment**, and the note **Paid on website for** the booking number. The credit is the exact amount collected, so a payment equal to the room charge on the bill leaves a zero total. It is not a `pos.payment`, so the register does not expect that money in the drawer. A negative payment, or one larger than the room charge, is rejected.
 
@@ -119,8 +119,8 @@ Reload the Point of Sale after check-in. Draft orders for that register are part
 1. Upgrade with `-u fav_booking` (command above) and open a restaurant POS session.
 2. Create a room: code `VIP-PLUS-1`, the POS table for that room, and an hourly product available in POS.
 3. Send the upsert sample with `room_code` `VIP-PLUS-1`. The booking is confirmed and has no **New** button in the UI.
-4. Open the booking and press **Check In**.
-5. Reload the POS. The table shows an open bill: hours of the room product, and a **Website payment** line when `amount_paid` was sent.
+4. Open the register. Today's booking is already a draft bill on its table. A booking sent for today while the session is open appears as well. A booking for tomorrow does not, until that day's session opens.
+5. **FAV → Bookings** shows the day schedule for the selected outlet. Click a block for the booking, and **Bill** for the POS order.
 
 The same body works on Odoo's JSON-2 API, which is the supported external RPC in Odoo 20:
 
@@ -196,7 +196,7 @@ Checked against the Odoo 20.0 sources:
 - SQL constraints are `models.Constraint` attributes. `_sql_constraints` is gone. Room overlap is a Python constraint (cancelled bookings excluded) plus `SELECT … FOR UPDATE` on the room row. Community does not ship `web_gantt`.
 - HTTP JSON routes are `type='jsonrpc'` (the old `type='json'`) or `type='json2'` for a plain JSON body. This module's endpoint is `json2`.
 - API keys are bearer tokens. Scope `rpc` is what `auth='bearer'` checks. Keys expire; plan rotation.
-- A draft `pos.order` with `table_id` set is the open bill. The POS loads it when `state` is `draft` and `config_id` is the register (`pos.order._load_pos_data_domain`). Check-in also calls `pos.config._notify_synchronisation` for `pos.order` and `pos.order.line`.
+- A draft `pos.order` with `table_id` set is the open bill. The POS loads it when `state` is `draft` and `config_id` is the register (`pos.order._load_pos_data_domain`). Creating a bill also calls `pos.config._notify_synchronisation`. Session open is `pos.session.create` / `write` when `state` becomes `opened` (`_set_opening_control_data` writes that state). The local day uses `res.users.tz`, or `Asia/Jakarta` when the user has none. `date_start` in that zone selects the day. An API change updates the draft bill only when every line is marked `fav_line_role` `room` or `payment`. Extra lines are left in place and noted on the booking. Cancelling or moving the booking off that day cancels an untouched bill. The day schedule is the client action `fav_booking.schedule`.
 - Website money is stored on `fav.booking.amount_down_payment` (form label **Payment**). The API accepts `amount_paid`, which wins when both are sent, and still accepts `amount_down_payment`. Check-in posts a negative untaxed `pos.order.line` named **Website payment** (`price_type=manual`), capped at the room charge on the bill. It is not a `pos.payment`: a payment record would be counted in the session (cash, bank, or customer account) even though the website took the money outside the register. Putting the room product's taxes on that line would also turn a 100,000 collection into a larger credit.
 
 ## Next steps

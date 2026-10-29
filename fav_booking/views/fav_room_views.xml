@@ -5,8 +5,11 @@
         <field name="model">fav.room</field>
         <field name="arch" type="xml">
             <list string="Rooms">
+                <field name="sequence" widget="handle"/>
                 <field name="name"/>
+                <field name="room_type"/>
                 <field name="code"/>
+                <field name="floor_id"/>
                 <field name="table_id"/>
                 <field name="table_room_name"/>
                 <field name="product_id"/>
@@ -29,6 +32,9 @@
                     <group>
                         <group>
                             <field name="code"/>
+                            <field name="room_type"/>
+                            <field name="sequence"/>
+                            <field name="floor_id"/>
                             <field name="active" invisible="1"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                         </group>

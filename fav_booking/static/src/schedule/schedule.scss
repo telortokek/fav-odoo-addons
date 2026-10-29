@@ -1,0 +1,112 @@
+.o_fav_schedule {
+    min-height: 0;
+
+    .o_fav_schedule_date {
+        width: 11rem;
+    }
+
+    .o_fav_schedule_outlet {
+        width: 16rem;
+    }
+
+    .o_fav_schedule_table {
+        display: grid;
+        grid-template-columns: 4.5rem repeat(var(--fav-rooms), minmax(9rem, 1fr));
+        min-width: max-content;
+    }
+
+    .o_fav_schedule_corner,
+    .o_fav_schedule_type,
+    .o_fav_schedule_room,
+    .o_fav_schedule_time {
+        position: sticky;
+        background: var(--o-view-background-color, #fff);
+        z-index: 2;
+    }
+
+    .o_fav_schedule_type,
+    .o_fav_schedule_room {
+        top: 0;
+        border-bottom: 1px solid var(--border-color, #dee2e6);
+        border-left: 1px solid var(--border-color, #dee2e6);
+        font-weight: 600;
+        padding: 0.35rem 0.5rem;
+        text-align: center;
+    }
+
+    .o_fav_schedule_type {
+        z-index: 3;
+        background: #f4f6f8;
+    }
+
+    .o_fav_schedule_room {
+        top: 2rem;
+    }
+
+    .o_fav_schedule_times,
+    .o_fav_schedule_column {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .o_fav_schedule_column {
+        position: relative;
+        border-left: 1px solid var(--border-color, #dee2e6);
+    }
+
+    .o_fav_schedule_time,
+    .o_fav_schedule_slot {
+        height: 1.6rem;
+        border-top: 1px dashed #e6e6e6;
+    }
+
+    .o_fav_schedule_time {
+        left: 0;
+        font-size: 0.75rem;
+        color: #6c757d;
+        padding-right: 0.35rem;
+        text-align: right;
+    }
+
+    .o_fav_major {
+        border-top-style: solid;
+        border-top-color: #ced4da;
+    }
+
+    .o_fav_schedule_block {
+        position: absolute;
+        left: 0.2rem;
+        right: 0.2rem;
+        overflow: hidden;
+        border: 0;
+        border-radius: 0.35rem;
+        padding: 0.15rem 0.35rem;
+        text-align: left;
+        color: #1f2933;
+        font-size: 0.75rem;
+        line-height: 1.15;
+        z-index: 1;
+    }
+
+    .o_fav_state_draft { background: #e9ecef; }
+    .o_fav_state_confirmed { background: #cfe2ff; }
+    .o_fav_state_checked_in { background: #ffe8a3; }
+    .o_fav_state_done { background: #d1e7dd; }
+    .o_fav_state_cancelled { background: #f8d7da; }
+
+    .o_fav_schedule_partner,
+    .o_fav_schedule_when,
+    .o_fav_schedule_pay {
+        display: block;
+    }
+
+    .o_fav_schedule_partner {
+        font-weight: 700;
+    }
+
+    .o_fav_schedule_bill {
+        display: inline-block;
+        margin-top: 0.1rem;
+        text-decoration: underline;
+    }
+}

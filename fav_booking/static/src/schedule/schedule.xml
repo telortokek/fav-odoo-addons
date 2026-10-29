@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="fav_booking.Schedule">
+        <div class="o_fav_schedule d-flex flex-column h-100 bg-view">
+            <div class="o_fav_schedule_toolbar d-flex align-items-center gap-2 p-2 border-bottom">
+                <button type="button" class="btn btn-secondary" t-on-click="this.prevDay">Previous</button>
+                <input type="date" class="form-control o_fav_schedule_date" t-att-value="this.state.day" t-on-change="this.onDate"/>
+                <button type="button" class="btn btn-secondary" t-on-click="this.goToday">Today</button>
+                <button type="button" class="btn btn-secondary" t-on-click="this.nextDay">Next</button>
+                <select class="form-select o_fav_schedule_outlet" t-att-value="this.state.floorId" t-on-change="this.onFloor">
+                    <t t-foreach="this.state.data and this.state.data.floors or []" t-as="floor" t-key="floor.id">
+                        <option t-att-value="floor.id" t-att-selected="floor.id == this.state.floorId" t-out="floor.name"/>
+                    </t>
+                </select>
+                <span class="text-muted ms-2" t-if="this.state.data">
+                    <t t-out="this.formatHour(this.state.data.open_hour)"/>
+                    –
+                    <t t-out="this.formatHour(this.state.data.close_hour)"/>
+                    <t t-if="this.state.data.tz"> · <t t-out="this.state.data.tz"/></t>
+                </span>
+            </div>
+            <div class="o_fav_schedule_scroll flex-grow-1 overflow-auto">
+                <t t-if="this.state.data and this.rooms.length">
+                    <div class="o_fav_schedule_table" t-attf-style="--fav-rooms: {{ this.rooms.length }}">
+                        <div class="o_fav_schedule_corner" style="grid-row: 1 / span 2; grid-column: 1"/>
+                        <t t-foreach="this.state.data.groups" t-as="group" t-key="group.type">
+                            <div class="o_fav_schedule_type" t-attf-style="grid-row: 1; grid-column: span {{ group.rooms.length }}" t-out="group.type"/>
+                        </t>
+                        <t t-foreach="this.rooms" t-as="room" t-key="room.id">
+                            <div class="o_fav_schedule_room" style="grid-row: 2" t-out="room.name"/>
+                        </t>
+                        <div class="o_fav_schedule_times" style="grid-row: 3; grid-column: 1">
+                            <t t-foreach="this.slots" t-as="slot" t-key="slot.key">
+                                <div t-attf-class="o_fav_schedule_time {{ slot.major ? 'o_fav_major' : '' }}" t-out="slot.label"/>
+                            </t>
+                        </div>
+                        <t t-foreach="this.rooms" t-as="room" t-key="room.id">
+                            <div class="o_fav_schedule_column" style="grid-row: 3">
+                                <t t-foreach="this.slots" t-as="slot" t-key="slot.key">
+                                    <div t-attf-class="o_fav_schedule_slot {{ slot.major ? 'o_fav_major' : '' }}"/>
+                                </t>
+                                <t t-foreach="this.bookingsFor(room.id)" t-as="booking" t-key="booking.id">
+                                    <button type="button"
+                                        t-attf-class="o_fav_schedule_block o_fav_state_{{ booking.state }}"
+                                        t-att-style="this.blockStyle(booking)"
+                                        t-on-click="() => this.openBooking(booking)">
+                                        <span class="o_fav_schedule_partner" t-out="booking.partner"/>
+                                        <span class="o_fav_schedule_when">
+                                            <t t-out="booking.start_label"/>–<t t-out="booking.end_label"/>
+                                        </span>
+                                        <span class="o_fav_schedule_pay" t-if="booking.payment" t-out="this.paymentLabel(booking)"/>
+                                        <span t-if="booking.pos_order_id" class="o_fav_schedule_bill" t-on-click.stop="() => this.openBill(booking)">Bill</span>
+                                    </button>
+                                </t>
+                            </div>
+                        </t>
+                    </div>
+                </t>
+                <div t-else="" class="p-4 text-muted">No rooms for this outlet.</div>
+            </div>
+        </div>
+    </t>
+</templates>

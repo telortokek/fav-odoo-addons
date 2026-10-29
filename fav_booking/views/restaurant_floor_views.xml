@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_restaurant_floor_form_schedule" model="ir.ui.view">
+        <field name="name">restaurant.floor.form.fav.schedule</field>
+        <field name="model">restaurant.floor</field>
+        <field name="inherit_id" ref="pos_restaurant.view_restaurant_floor_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="fav_schedule_start" widget="float_time"/>
+                <field name="fav_schedule_end" widget="float_time"/>
+                <field name="fav_schedule_slot"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

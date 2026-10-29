@@ -255,7 +255,7 @@ class TestFavRoomCheckIn(TransactionCase):
         self.assertEqual(booking.state, 'confirmed')
         self.assertFalse(booking.pos_order_id)
 
-    def test_check_in_rejects_a_table_that_already_has_a_bill(self):
+    def test_second_bill_on_a_busy_table_is_allowed(self):
         open_restaurant_session(self.env, self.floor, name='FAV Occupied Register')
         first = self.env['fav.booking'].browse(
             self.env['fav.booking'].upsert_from_website(**self._payload(external_ref='WEB-FIRST'))['id']
@@ -268,7 +268,9 @@ class TestFavRoomCheckIn(TransactionCase):
                 date_end='2026-10-20 08:00:00',
             ))['id']
         )
-        with self.assertRaises(UserError):
-            second.action_check_in()
-        self.assertEqual(second.state, 'confirmed')
-        self.assertFalse(second.pos_order_id)
+        second.action_check_in()
+        self.assertEqual(second.state, 'checked_in')
+        self.assertTrue(second.pos_order_id)
+        self.assertNotEqual(second.pos_order_id, first.pos_order_id)
+        note = ' '.join(second.message_ids.mapped('body'))
+        self.assertIn('already has draft order', note)
