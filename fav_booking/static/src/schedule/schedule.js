@@ -6,6 +6,7 @@ import { useService } from "@web/core/utils/hooks";
 import { standardActionServiceProps } from "@web/webclient/actions/action_plugin";
 
 const FLOOR_KEY = "fav_booking.schedule_floor_id";
+const MODE_KEY = "fav_booking.schedule_mode";
 
 export class FavSchedule extends Component {
     static template = "fav_booking.Schedule";
@@ -16,10 +17,12 @@ export class FavSchedule extends Component {
     setup() {
         this.orm = useService("orm");
         this.action = useService("action");
-        const stored = window.localStorage.getItem(FLOOR_KEY);
+        const storedFloor = window.localStorage.getItem(FLOOR_KEY);
+        const storedMode = window.localStorage.getItem(MODE_KEY);
         this.state = proxy({
             day: this.todayString(),
-            floorId: stored ? Number(stored) : false,
+            floorId: storedFloor ? Number(storedFloor) : false,
+            mode: storedMode === "week" ? "week" : "day",
             data: null,
         });
         onWillStart(() => this.load());
@@ -36,6 +39,7 @@ export class FavSchedule extends Component {
         const data = await this.orm.call("fav.booking", "get_schedule", [], {
             day: this.state.day,
             floor_id: this.state.floorId || false,
+            days: this.state.mode === "week" ? 7 : 1,
         });
         this.state.data = data;
         this.state.day = data.day;
@@ -55,11 +59,11 @@ export class FavSchedule extends Component {
     }
 
     prevDay() {
-        this.shiftDay(-1);
+        this.shiftDay(this.state.mode === "week" ? -7 : -1);
     }
 
     nextDay() {
-        this.shiftDay(1);
+        this.shiftDay(this.state.mode === "week" ? 7 : 1);
     }
 
     goToday() {
@@ -78,51 +82,45 @@ export class FavSchedule extends Component {
         this.load();
     }
 
-    formatHour(hour) {
-        const normalized = ((hour % 24) + 24) % 24;
-        const whole = Math.floor(normalized);
-        const minutes = Math.round((normalized - whole) * 60);
-        return `${String(whole).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-    }
-
-    get slots() {
-        const data = this.state.data;
-        if (!data) {
-            return [];
-        }
-        const slots = [];
-        const step = data.slot_minutes / 60;
-        for (let hour = data.open_hour; hour < data.close_hour - 0.001; hour += step) {
-            slots.push({
-                key: hour.toFixed(4),
-                label: this.formatHour(hour),
-                major: Math.abs(hour - Math.round(hour)) < 0.001,
-            });
-        }
-        return slots;
+    setMode(mode) {
+        this.state.mode = mode;
+        window.localStorage.setItem(MODE_KEY, mode);
+        this.load();
     }
 
     get rooms() {
-        const groups = this.state.data?.groups || [];
-        return groups.flatMap((group) => group.rooms);
+        return this.state.data?.rooms || [];
     }
 
-    bookingsFor(roomId) {
-        return (this.state.data?.bookings || []).filter((booking) => booking.room_id === roomId);
+    get slots() {
+        return this.state.data?.slots || [];
     }
 
-    blockStyle(booking) {
-        const total = this.state.data?.total_minutes || 1;
-        const top = (booking.start_minute / total) * 100;
-        const height = ((booking.end_minute - booking.start_minute) / total) * 100;
-        return `top: ${top}%; height: ${Math.max(height, 2)}%;`;
+    get boards() {
+        const boards = this.state.data?.boards || [];
+        return boards.map((board) => {
+            const byStart = {};
+            const covered = {};
+            for (const booking of board.bookings) {
+                byStart[`${booking.room_id}:${booking.slot_index}`] = booking;
+                for (let offset = 1; offset < booking.slot_span; offset++) {
+                    covered[`${booking.room_id}:${booking.slot_index + offset}`] = true;
+                }
+            }
+            return { ...board, byStart, covered };
+        });
     }
 
-    paymentLabel(booking) {
-        if (!booking.payment) {
-            return "";
+    cell(board, roomId, index) {
+        const key = `${roomId}:${index}`;
+        const booking = board.byStart[key];
+        if (booking) {
+            return { show: true, empty: false, ...booking };
         }
-        return booking.payment.toLocaleString(undefined, { maximumFractionDigits: 0 });
+        if (board.covered[key]) {
+            return { show: false, empty: false };
+        }
+        return { show: false, empty: true };
     }
 
     openBooking(booking) {
@@ -131,17 +129,6 @@ export class FavSchedule extends Component {
             name: booking.name,
             res_model: "fav.booking",
             res_id: booking.id,
-            views: [[false, "form"]],
-            target: "current",
-        });
-    }
-
-    openBill(booking) {
-        this.action.doAction({
-            type: "ir.actions.act_window",
-            name: "POS bill",
-            res_model: "pos.order",
-            res_id: booking.pos_order_id,
             views: [[false, "form"]],
             target: "current",
         });

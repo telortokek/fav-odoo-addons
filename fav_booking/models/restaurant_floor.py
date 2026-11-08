@@ -8,16 +8,18 @@ class RestaurantFloor(models.Model):
     fav_schedule_start = fields.Float(
         string='Schedule Opens',
         default=9.0,
-        help='First hour on the day schedule. 9 is 09:00.',
+        help='Unused by the booking board. The board reads the system parameters '
+             'fav_booking.schedule_start_hour and fav_booking.schedule_end_hour.',
     )
     fav_schedule_end = fields.Float(
         string='Schedule Closes',
         default=26.0,
-        help='Last hour on the day schedule. Hours past 24 are the next day, so 26 is 02:00.',
+        help='Unused by the booking board. Hours past 24 mean the next day.',
     )
     fav_schedule_slot = fields.Integer(
         string='Schedule Slot (minutes)',
         default=30,
+        help='Unused by the booking board. Rows are fixed at 30 minutes.',
     )
 
     @api.constrains('fav_schedule_start', 'fav_schedule_end', 'fav_schedule_slot')

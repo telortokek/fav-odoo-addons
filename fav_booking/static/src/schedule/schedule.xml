@@ -2,7 +2,15 @@
 <templates xml:space="preserve">
     <t t-name="fav_booking.Schedule">
         <div class="o_fav_schedule d-flex flex-column h-100 bg-view">
-            <div class="o_fav_schedule_toolbar d-flex align-items-center gap-2 p-2 border-bottom">
+            <div class="o_fav_schedule_toolbar d-flex flex-wrap align-items-center gap-2 p-2 border-bottom">
+                <div class="btn-group" role="group">
+                    <button type="button"
+                        t-attf-class="btn {{ this.state.mode == 'day' ? 'btn-primary' : 'btn-secondary' }}"
+                        t-on-click="() => this.setMode('day')">Day</button>
+                    <button type="button"
+                        t-attf-class="btn {{ this.state.mode == 'week' ? 'btn-primary' : 'btn-secondary' }}"
+                        t-on-click="() => this.setMode('week')">7 days</button>
+                </div>
                 <button type="button" class="btn btn-secondary" t-on-click="this.prevDay">Previous</button>
                 <input type="date" class="form-control o_fav_schedule_date" t-att-value="this.state.day" t-on-change="this.onDate"/>
                 <button type="button" class="btn btn-secondary" t-on-click="this.goToday">Today</button>
@@ -12,47 +20,46 @@
                         <option t-att-value="floor.id" t-att-selected="floor.id == this.state.floorId" t-out="floor.name"/>
                     </t>
                 </select>
-                <span class="text-muted ms-2" t-if="this.state.data">
-                    <t t-out="this.formatHour(this.state.data.open_hour)"/>
-                    –
-                    <t t-out="this.formatHour(this.state.data.close_hour)"/>
-                    <t t-if="this.state.data.tz"> · <t t-out="this.state.data.tz"/></t>
+                <span class="text-muted" t-if="this.state.data">
+                    <t t-out="this.state.data.tz"/>
                 </span>
             </div>
-            <div class="o_fav_schedule_scroll flex-grow-1 overflow-auto">
+            <div class="o_fav_schedule_scroll flex-grow-1">
                 <t t-if="this.state.data and this.rooms.length">
-                    <div class="o_fav_schedule_table" t-attf-style="--fav-rooms: {{ this.rooms.length }}">
-                        <div class="o_fav_schedule_corner" style="grid-row: 1 / span 2; grid-column: 1"/>
-                        <t t-foreach="this.state.data.groups" t-as="group" t-key="group.type">
-                            <div class="o_fav_schedule_type" t-attf-style="grid-row: 1; grid-column: span {{ group.rooms.length }}" t-out="group.type"/>
-                        </t>
-                        <t t-foreach="this.rooms" t-as="room" t-key="room.id">
-                            <div class="o_fav_schedule_room" style="grid-row: 2" t-out="room.name"/>
-                        </t>
-                        <div class="o_fav_schedule_times" style="grid-row: 3; grid-column: 1">
-                            <t t-foreach="this.slots" t-as="slot" t-key="slot.key">
-                                <div t-attf-class="o_fav_schedule_time {{ slot.major ? 'o_fav_major' : '' }}" t-out="slot.label"/>
-                            </t>
-                        </div>
-                        <t t-foreach="this.rooms" t-as="room" t-key="room.id">
-                            <div class="o_fav_schedule_column" style="grid-row: 3">
-                                <t t-foreach="this.slots" t-as="slot" t-key="slot.key">
-                                    <div t-attf-class="o_fav_schedule_slot {{ slot.major ? 'o_fav_major' : '' }}"/>
-                                </t>
-                                <t t-foreach="this.bookingsFor(room.id)" t-as="booking" t-key="booking.id">
-                                    <button type="button"
-                                        t-attf-class="o_fav_schedule_block o_fav_state_{{ booking.state }}"
-                                        t-att-style="this.blockStyle(booking)"
-                                        t-on-click="() => this.openBooking(booking)">
-                                        <span class="o_fav_schedule_partner" t-out="booking.partner"/>
-                                        <span class="o_fav_schedule_when">
-                                            <t t-out="booking.start_label"/>–<t t-out="booking.end_label"/>
-                                        </span>
-                                        <span class="o_fav_schedule_pay" t-if="booking.payment" t-out="this.paymentLabel(booking)"/>
-                                        <span t-if="booking.pos_order_id" class="o_fav_schedule_bill" t-on-click.stop="() => this.openBill(booking)">Bill</span>
-                                    </button>
-                                </t>
-                            </div>
+                    <div class="o_fav_schedule_days">
+                        <t t-foreach="this.boards" t-as="board" t-key="board.day">
+                            <section class="o_fav_schedule_day">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th class="o_fav_date" t-att-colspan="this.rooms.length + 1" t-out="board.label"/>
+                                        </tr>
+                                        <tr>
+                                            <th class="o_fav_jam">JAM</th>
+                                            <t t-foreach="this.rooms" t-as="room" t-key="room.id">
+                                                <th t-out="room.name"/>
+                                            </t>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="this.slots" t-as="slot" t-key="slot.index">
+                                            <tr>
+                                                <th class="o_fav_jam" t-out="slot.label"/>
+                                                <t t-foreach="this.rooms" t-as="room" t-key="room.id">
+                                                    <t t-set="cell" t-value="this.cell(board, room.id, slot.index)"/>
+                                                    <td t-if="cell.show"
+                                                        t-att-rowspan="cell.slot_span"
+                                                        t-attf-class="o_fav_booked o_fav_state_{{ cell.state }}"
+                                                        t-on-click="() => this.openBooking(cell)">
+                                                        <t t-out="cell.partner"/>
+                                                    </td>
+                                                    <td t-elif="cell.empty"/>
+                                                </t>
+                                            </tr>
+                                        </t>
+                                    </tbody>
+                                </table>
+                            </section>
                         </t>
                     </div>
                 </t>

@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -10,6 +11,14 @@ from odoo.fields import Command
 from odoo.tools import float_round, plaintext2html
 
 FAV_DEFAULT_TZ = 'Asia/Jakarta'
+FAV_SCHEDULE_SLOT_MINUTES = 30
+FAV_SCHEDULE_DAY_NAMES = (
+    'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu',
+)
+FAV_SCHEDULE_MONTH_NAMES = (
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -898,84 +907,179 @@ class FavBooking(models.Model):
         end_utc = end_local.astimezone(ZoneInfo('UTC')).replace(tzinfo=None)
         return start_utc, end_utc
 
-    def _schedule_offset_minutes(self, utc_dt, day, open_hour):
-        local = self._as_local(utc_dt)
-        origin = datetime(day.year, day.month, day.day, tzinfo=local.tzinfo)
-        minutes = (local - origin).total_seconds() / 60.0
-        return minutes - (open_hour * 60.0)
+    @api.model
+    def _schedule_hour_param(self, key, default):
+        # Read the row directly. Odoo 20's get_float is cached, and a change in
+        # Settings must show up on the next board load.
+        param = self.env['ir.config_parameter'].sudo().search([('key', '=', key)], limit=1)
+        if not param or param.value in (False, ''):
+            return default
+        try:
+            return float(param.value)
+        except (TypeError, ValueError):
+            return default
 
     @api.model
-    def get_schedule(self, day=None, floor_id=None):
-        """Day grid: rooms across, time down, one outlet at a time."""
+    def _schedule_hours(self):
+        """Opening and closing as hours from local midnight. 26 is 02:00 next day."""
+        start = self._schedule_hour_param('fav_booking.schedule_start_hour', 10.0)
+        end = self._schedule_hour_param('fav_booking.schedule_end_hour', 26.0)
+        if end <= start:
+            end = start + 16.0
+        return start, end
+
+    @api.model
+    def _schedule_clock(self, minutes):
+        minutes = int(minutes) % (24 * 60)
+        return f'{minutes // 60:02d}:{minutes % 60:02d}'
+
+    @api.model
+    def _schedule_date_label(self, day):
+        weekday = FAV_SCHEDULE_DAY_NAMES[day.weekday()]
+        month = FAV_SCHEDULE_MONTH_NAMES[day.month - 1]
+        return f'{weekday}, {day.day:02d} {month} {day.year}'
+
+    @api.model
+    def _schedule_window(self, day, open_hour, close_hour):
+        tz = self._schedule_tz()
+        origin = datetime(day.year, day.month, day.day, tzinfo=tz)
+        start_local = origin + timedelta(minutes=int(round(open_hour * 60)))
+        end_local = origin + timedelta(minutes=int(round(close_hour * 60)))
+        start_utc = start_local.astimezone(ZoneInfo('UTC')).replace(tzinfo=None)
+        end_utc = end_local.astimezone(ZoneInfo('UTC')).replace(tzinfo=None)
+        return start_local, end_local, start_utc, end_utc
+
+    def _minutes_after(self, utc_dt, origin_local):
+        local = self._as_local(utc_dt)
+        return (local - origin_local).total_seconds() / 60.0
+
+    @api.model
+    def _schedule_slots(self, open_hour, close_hour):
+        slot = FAV_SCHEDULE_SLOT_MINUTES
+        start = int(round(open_hour * 60))
+        end = int(round(close_hour * 60))
+        slots = []
+        minute = start
+        index = 0
+        while minute + slot <= end:
+            slots.append({
+                'index': index,
+                'label': f'{self._schedule_clock(minute)}-{self._schedule_clock(minute + slot)}',
+            })
+            minute += slot
+            index += 1
+        return slots
+
+    def _schedule_blocks(self, bookings, origin_local, total_minutes):
+        """One merged cell per booking. A span is the number of 30-minute rows."""
+        slot = FAV_SCHEDULE_SLOT_MINUTES
+        occupied = set()
+        blocks = []
+        ordered = bookings.sorted(key=lambda booking: (booking.date_start, booking.id))
+        for booking in ordered:
+            start_min = round(booking._minutes_after(booking.date_start, origin_local), 4)
+            end_min = round(booking._minutes_after(booking.date_end, origin_local), 4)
+            visible_start = max(start_min, 0)
+            visible_end = min(end_min, total_minutes)
+            if visible_end <= visible_start + 1e-6:
+                continue
+            first = int(math.floor((visible_start + 1e-6) / slot))
+            last = int(math.ceil((visible_end - 1e-6) / slot))
+            last = min(last, int(total_minutes // slot))
+            if last <= first:
+                continue
+            room_id = booking.room_id.id
+            while first < last and (room_id, first) in occupied:
+                first += 1
+            span_end = first
+            while span_end < last and (room_id, span_end) not in occupied:
+                span_end += 1
+            if span_end <= first:
+                continue
+            for index in range(first, span_end):
+                occupied.add((room_id, index))
+            blocks.append({
+                'id': booking.id,
+                'name': booking.name,
+                'room_id': room_id,
+                'partner': booking.partner_id.name or '',
+                'state': booking.state,
+                'slot_index': first,
+                'slot_span': span_end - first,
+            })
+        return blocks
+
+    @api.model
+    def get_schedule(self, day=None, floor_id=None, days=1):
+        """Sheet grid: JAM down the side, rooms across, one outlet at a time.
+
+        ``days`` greater than 1 returns that many consecutive boards starting
+        at ``day``. Hours come from the system parameters, not from the floor.
+        """
         if day:
             day = fields.Date.to_date(day)
         else:
             day = self._local_today()
+        try:
+            days = int(days or 1)
+        except (TypeError, ValueError):
+            days = 1
+        days = min(max(days, 1), 31)
         rooms = self.env['fav.room'].search([])
         floors = rooms.mapped('floor_id').sorted(key=lambda floor: floor.name or '')
         floor = self.env['restaurant.floor'].browse(int(floor_id)).exists() if floor_id else floors[:1]
         if floor and floor not in floors:
             floor = floors[:1]
-        open_hour = floor.fav_schedule_start if floor else 9.0
-        close_hour = floor.fav_schedule_end if floor else 26.0
-        slot = floor.fav_schedule_slot if floor and floor.fav_schedule_slot else 30
-        total_minutes = max((close_hour - open_hour) * 60.0, slot)
+        open_hour, close_hour = self._schedule_hours()
+        slots = self._schedule_slots(open_hour, close_hour)
+        total_minutes = len(slots) * FAV_SCHEDULE_SLOT_MINUTES
         selected = rooms.filtered(lambda room: room.floor_id == floor)
-        selected = selected.sorted(key=lambda room: (room.room_type or '', room.sequence, room.name or ''))
-        start_utc, end_utc = self._local_day_bounds(day)
-        bookings = self.search([
-            ('room_id', 'in', selected.ids),
-            ('state', '!=', 'cancelled'),
-            ('date_start', '>=', fields.Datetime.to_string(start_utc)),
-            ('date_start', '<', fields.Datetime.to_string(end_utc)),
-        ])
-        groups = []
-        for room in selected:
-            label = room.room_type or self.env._('Rooms')
-            if not groups or groups[-1]['type'] != label:
-                groups.append({'type': label, 'rooms': []})
-            groups[-1]['rooms'].append({
-                'id': room.id,
-                'name': room.name,
-                'type': label,
-            })
-        blocks = []
-        for booking in bookings:
-            start_min = booking._schedule_offset_minutes(booking.date_start, day, open_hour)
-            end_min = booking._schedule_offset_minutes(booking.date_end, day, open_hour)
-            if end_min < start_min:
-                end_min += 24 * 60
-            visible_start = max(start_min, 0)
-            visible_end = min(end_min, total_minutes)
-            if visible_end <= visible_start:
-                continue
-            local_start = booking._as_local(booking.date_start)
-            local_end = booking._as_local(booking.date_end)
-            blocks.append({
-                'id': booking.id,
-                'name': booking.name,
-                'room_id': booking.room_id.id,
-                'partner': booking.partner_id.name,
-                'state': booking.state,
-                'payment': booking.amount_down_payment,
-                'currency_id': booking.currency_id.id,
-                'pos_order_id': booking.pos_order_id.id or False,
-                'start_label': local_start.strftime('%H:%M'),
-                'end_label': local_end.strftime('%H:%M'),
-                'start_minute': visible_start,
-                'end_minute': visible_end,
+        selected = selected.sorted(key=lambda room: (room.sequence, room.name or '', room.id))
+        _origin, _end_local, range_start, _range_end = self._schedule_window(day, open_hour, close_hour)
+        last_day = day + timedelta(days=days - 1)
+        _last_start, _last_end, _last_start_utc, range_end = self._schedule_window(
+            last_day, open_hour, close_hour,
+        )
+        bookings = self.browse()
+        if selected:
+            bookings = self.search([
+                ('room_id', 'in', selected.ids),
+                ('state', '!=', 'cancelled'),
+                ('date_start', '<', fields.Datetime.to_string(range_end)),
+                ('date_end', '>', fields.Datetime.to_string(range_start)),
+            ])
+        boards = []
+        for offset in range(days):
+            current = day + timedelta(days=offset)
+            origin, _end_local, window_start, window_end = self._schedule_window(
+                current, open_hour, close_hour,
+            )
+            day_bookings = bookings.filtered(
+                lambda booking, start=window_start, end=window_end: (
+                    booking.date_start < end and booking.date_end > start
+                ),
+            )
+            boards.append({
+                'day': fields.Date.to_string(current),
+                'label': self._schedule_date_label(current),
+                'bookings': self._schedule_blocks(day_bookings, origin, total_minutes),
             })
         return {
             'day': fields.Date.to_string(day),
+            'days': days,
             'tz': str(self._schedule_tz()),
             'floor_id': floor.id if floor else False,
             'open_hour': open_hour,
             'close_hour': close_hour,
-            'slot_minutes': slot,
-            'total_minutes': total_minutes,
+            'slot_minutes': FAV_SCHEDULE_SLOT_MINUTES,
             'floors': [{'id': item.id, 'name': item.name} for item in floors],
-            'groups': groups,
-            'bookings': blocks,
+            'rooms': [{
+                'id': room.id,
+                'name': room.name,
+                'sequence': room.sequence,
+            } for room in selected],
+            'slots': slots,
+            'boards': boards,
         }
 
     @api.model

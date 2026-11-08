@@ -147,22 +147,75 @@ class TestFavAutoBill(TransactionCase):
     def test_schedule_columns_follow_the_outlet(self):
         self._book('WEB-GRID', 'FAV-AUTO-VIP', 10, 12)
         self._book('WEB-TENUN', 'FAV-AUTO-TENUN', 11, 13)
+        cancelled = self._book('WEB-GRID-OFF', 'FAV-AUTO-VVIP', 14, 16)
+        cancelled.action_cancel()
         data = self.env['fav.booking'].get_schedule(floor_id=self.setiabudi.id)
         self.assertEqual(data['floor_id'], self.setiabudi.id)
-        self.assertEqual(data['open_hour'], 9.0)
+        self.assertEqual(data['open_hour'], 10.0)
         self.assertEqual(data['close_hour'], 26.0)
         self.assertEqual(data['slot_minutes'], 30)
-        names = [room['name'] for group in data['groups'] for room in group['rooms']]
+        self.assertEqual(data['slots'][0]['label'], '10:00-10:30')
+        self.assertEqual(data['slots'][-1]['label'], '01:30-02:00')
+        names = [room['name'] for room in data['rooms']]
         self.assertEqual(names, ['VIP PLUS 1', 'VVIP 1'])
-        self.assertEqual(data['groups'][0]['type'], 'VIP PLUS')
-        block = next(item for item in data['bookings'] if item['name'].startswith('BK'))
-        vip_block = next(item for item in data['bookings'] if item['room_id'] == self.vip.id)
-        self.assertEqual(vip_block['start_minute'], 60)
-        self.assertEqual(vip_block['end_minute'], 180)
-        self.assertEqual(vip_block['partner'], 'Schedule Guest')
+        block = data['boards'][0]['bookings'][0]
+        self.assertEqual(block['partner'], 'Schedule Guest')
+        self.assertEqual(block['state'], 'confirmed')
+        self.assertEqual(block['slot_index'], 0)
+        self.assertEqual(block['slot_span'], 4)
+        self.assertEqual(block['room_id'], self.vip.id)
+        self.assertFalse(any(item['room_id'] == self.vvip.id for item in data['boards'][0]['bookings']))
         self.assertTrue(any(floor['name'] == 'FAV Rental Tenun' for floor in data['floors']))
         tenun = self.env['fav.booking'].get_schedule(floor_id=self.tenun.id)
-        tenun_names = [room['name'] for group in tenun['groups'] for room in group['rooms']]
-        self.assertEqual(tenun_names, ['TENUN 1'])
-        self.assertEqual(len(tenun['bookings']), 1)
+        self.assertEqual([room['name'] for room in tenun['rooms']], ['TENUN 1'])
+        self.assertEqual(len(tenun['boards'][0]['bookings']), 1)
         self.assertNotEqual(block['room_id'], self.tenun_room.id)
+
+    def test_schedule_merges_past_midnight_and_orders_rooms(self):
+        self._room(self.setiabudi, 3, 'Early Name', 'FAV-AUTO-EARLY', 'SUITE', 20)
+        self._room(self.setiabudi, 4, 'Later Name', 'FAV-AUTO-LATER', 'SUITE', 0)
+        self._book('WEB-NIGHT', 'FAV-AUTO-VIP', 23, 1)
+        self._book('WEB-AFTER', 'FAV-AUTO-VVIP', 0, 1, day_offset=1)
+        data = self.env['fav.booking'].get_schedule(floor_id=self.setiabudi.id)
+        self.assertEqual(
+            [room['name'] for room in data['rooms']],
+            ['Later Name', 'VIP PLUS 1', 'VVIP 1', 'Early Name'],
+        )
+        night = next(item for item in data['boards'][0]['bookings'] if item['room_id'] == self.vip.id)
+        self.assertEqual(night['slot_index'], 26)
+        self.assertEqual(night['slot_span'], 4)
+        after = next(item for item in data['boards'][0]['bookings'] if item['room_id'] == self.vvip.id)
+        self.assertEqual(data['slots'][after['slot_index']]['label'], '00:00-00:30')
+        self.assertEqual(after['slot_span'], 2)
+        # That stay belongs on the board that was open at midnight, not on the next day's 10:00 grid.
+        next_day = self.env['fav.booking']._local_today() + timedelta(days=1)
+        nxt = self.env['fav.booking'].get_schedule(
+            day=fields.Date.to_string(next_day), floor_id=self.setiabudi.id,
+        )
+        self.assertFalse(any(item['room_id'] == self.vvip.id for item in nxt['boards'][0]['bookings']))
+
+    def test_schedule_hours_follow_the_system_parameters(self):
+        params = self.env['ir.config_parameter'].sudo()
+        params.set_float('fav_booking.schedule_start_hour', 12)
+        params.set_float('fav_booking.schedule_end_hour', 14)
+        self._book('WEB-NOON', 'FAV-AUTO-VIP', 12, 14)
+        self._book('WEB-MORNING', 'FAV-AUTO-VVIP', 10, 12)
+        data = self.env['fav.booking'].get_schedule(floor_id=self.setiabudi.id)
+        self.assertEqual(data['open_hour'], 12.0)
+        self.assertEqual(data['close_hour'], 14.0)
+        self.assertEqual([slot['label'] for slot in data['slots']], [
+            '12:00-12:30', '12:30-13:00', '13:00-13:30', '13:30-14:00',
+        ])
+        noon = data['boards'][0]['bookings']
+        self.assertEqual(len(noon), 1)
+        self.assertEqual(noon[0]['room_id'], self.vip.id)
+        self.assertEqual(noon[0]['slot_index'], 0)
+        self.assertEqual(noon[0]['slot_span'], 4)
+
+    def test_schedule_week_uses_indonesian_dates(self):
+        data = self.env['fav.booking'].get_schedule(day='2026-11-07', floor_id=self.setiabudi.id, days=7)
+        self.assertEqual(len(data['boards']), 7)
+        self.assertEqual(data['boards'][0]['label'], 'Sabtu, 07 November 2026')
+        self.assertEqual(data['boards'][1]['label'], 'Minggu, 08 November 2026')
+        self.assertEqual(data['boards'][0]['day'], '2026-11-07')
+        self.assertEqual(data['boards'][6]['day'], '2026-11-13')

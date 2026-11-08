@@ -1,6 +1,6 @@
 {
     'name': 'FAV Booking',
-    'version': '20.0.1.3.0',
+    'version': '20.0.1.4.0',
     'category': 'Sales/Point of Sale',
     'summary': 'Rental bookings from the FAV website, linked to sales and POS',
     'description': """
@@ -21,6 +21,7 @@ bookings in Odoo. Opening the register opens today's bills on the tables.
         'security/fav_booking_security.xml',
         'security/ir.access.csv',
         'data/ir_sequence_data.xml',
+        'data/schedule_parameters.xml',
         'views/fav_room_views.xml',
         'views/fav_booking_views.xml',
         'views/pos_order_views.xml',
