@@ -1,0 +1,43 @@
+# Local Odoo Community stack for FAV.
+# Odoo itself is not vendored; the official image supplies the server.
+# This repository is mounted at /mnt/extra-addons.
+
+name: fav
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-odoo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-odoo}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    volumes:
+      - fav-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-odoo} -d ${POSTGRES_DB:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  odoo:
+    image: odoo:${ODOO_VERSION:-20.0}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${ODOO_HTTP_PORT:-8069}:8069"
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-odoo}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-odoo}
+    volumes:
+      - ./config/odoo.conf:/etc/odoo/odoo.conf:ro
+      - ./:/mnt/extra-addons
+      - fav-odoo-data:/var/lib/odoo
+    restart: unless-stopped
+
+volumes:
+  fav-db-data:
+  fav-odoo-data:

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="fav_pos_room.floor_screen_element" t-inherit="pos_restaurant.floor_screen_element" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('o_fp_table_number')]" position="attributes">
+            <attribute name="t-out">table ? table.getName() : element.table_number</attribute>
+            <attribute name="class">o_fp_table_number label fs-4 fw-bolder o_fav_room_label</attribute>
+        </xpath>
+    </t>
+
+    <t t-name="fav_pos_room.floor_screen_shape" t-inherit="pos.floor_screen_shape" t-inherit-mode="extension">
+        <xpath expr="//span[hasclass('o_fp_table_number')]" position="attributes">
+            <attribute name="t-out">shape.record &amp;&amp; (shape.record.room_name || "").trim() ? shape.record.getName() : shape.tableNumber</attribute>
+            <attribute name="class">o_fp_table_number fs-4 fw-bolder o_fav_room_label</attribute>
+        </xpath>
+    </t>
+
+    <t t-name="fav_pos_room.TicketScreen" t-inherit="point_of_sale.TicketScreen" t-inherit-mode="extension">
+        <xpath expr="//div[contains(@t-attf-class, 'o_colorlist_item_color_1')]" position="replace">
+            <div t-if="tableTag" t-attf-class="badge rounded o_colorlist_item_color_1 ms-1" style="font-size: 0.75rem !important;">
+                <t t-if="order.table_id.room_name and order.table_id.room_name.trim()">
+                    <t t-out="tableTag"/>
+                </t>
+                <t t-else="">Table <t t-out="tableTag"/></t>
+            </div>
+        </xpath>
+    </t>
+</templates>

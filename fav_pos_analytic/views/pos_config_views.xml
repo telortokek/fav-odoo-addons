@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="pos_config_view_form_outlet_analytic" model="ir.ui.view">
+        <field name="name">pos.config.form.outlet.analytic</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='default_partner_id']/.." position="after">
+                <setting string="Outlet analytic account"
+                    help="Tagged at 100% on income, discount, and other profit-and-loss lines when this register closes or invoices an order. Receivable, bank, cash, and tax lines are not tagged.">
+                    <field name="analytic_account_id"/>
+                </setting>
+            </xpath>
+        </field>
+    </record>
+</odoo>

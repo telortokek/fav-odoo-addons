@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="pos_order_receipt_header_room_name" inherit_id="pos_restaurant.pos_order_receipt_header">
+        <xpath expr="//div[contains(@t-if, 'table_name')]" position="replace">
+            <div class="w-100 text-center mb-2" t-if="conditions['module_pos_restaurant'] and extra_data['table_name']">
+                <t t-if="extra_data.get('room_name')">
+                    <t t-out="extra_data['room_name']"/>
+                </t>
+                <t t-else="">
+                    Table <t t-out="extra_data['table_name']"/>
+                </t>
+                , Guest <t t-out="order['customer_count'] or 'N/A'"/>
+            </div>
+        </xpath>
+    </template>
+
+    <template id="pos_order_change_receipt_room_name" inherit_id="pos_restaurant.pos_order_change_receipt">
+        <xpath expr="//div[@name='table-info']" position="replace">
+            <div t-if="extra_data.get('table_name')" name="table-info" class="mb-2 text-large">
+                <span t-if="extra_data.get('floor_name')">
+                    <span t-out="extra_data['floor_name'] + ' - '"/>
+                    <span t-if="not extra_data.get('room_name')" class="text-bold">T </span>
+                </span>
+                <span t-elif="not extra_data.get('room_name')" class="text-bold">Table </span>
+                <span class="text-bold" t-out="extra_data['table_name']"/>
+            </div>
+        </xpath>
+    </template>
+</odoo>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_fav_root"
+        name="FAV"
+        sequence="25"
+        groups="fav_booking.group_fav_booking_user">
+        <menuitem id="menu_fav_booking"
+            name="Bookings"
+            action="action_fav_schedule"
+            sequence="10"/>
+        <menuitem id="menu_fav_booking_list"
+            name="All Bookings"
+            action="action_fav_booking"
+            sequence="20"/>
+        <menuitem id="menu_fav_config"
+            name="Configuration"
+            sequence="90"
+            groups="fav_booking.group_fav_booking_manager">
+            <menuitem id="menu_fav_room"
+                name="Rooms"
+                action="action_fav_room"
+                sequence="10"/>
+        </menuitem>
+    </menuitem>
+</odoo>
