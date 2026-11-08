@@ -113,52 +113,11 @@ export class FavSchedule extends Component {
         return "other";
     }
 
-    palette(room) {
-        const families = {
-            vip: {
-                heads: ["#dbeafe", "#bfdbfe", "#e0f2fe"],
-                cells: ["#f8fbff", "#f3f8ff", "#f5fbff"],
-                ink: "#1e3a8a",
-            },
-            vvip: {
-                heads: ["#ede9fe", "#ddd6fe", "#f3e8ff"],
-                cells: ["#faf8ff", "#f7f4ff", "#fdf9ff"],
-                ink: "#5b21b6",
-            },
-            deluxe: {
-                heads: ["#ccfbf1", "#99f6e4", "#d1fae5"],
-                cells: ["#f4fffc", "#f0fdfa", "#f6fef9"],
-                ink: "#115e59",
-            },
-            suite: {
-                heads: ["#ffedd5", "#fed7aa", "#fef3c7"],
-                cells: ["#fffaf5", "#fff7ed", "#fffdf5"],
-                ink: "#9a3412",
-            },
-            other: {
-                heads: ["#fce7f3", "#e0e7ff", "#dcfce7"],
-                cells: ["#fff7fb", "#f8f9ff", "#f6fef8"],
-                ink: "#334155",
-            },
-        };
+    roomClass(room, extra) {
         const key = this.familyKey(room);
-        const family = families[key];
         const siblings = this.rooms.filter((item) => this.familyKey(item) === key);
-        const shade = Math.max(siblings.findIndex((item) => item.id === room.id), 0) % family.heads.length;
-        return {
-            head: family.heads[shade],
-            cell: family.cells[shade],
-            ink: family.ink,
-        };
-    }
-
-    roomHeadStyle(room) {
-        const tone = this.palette(room);
-        return `background-color: ${tone.head}; color: ${tone.ink};`;
-    }
-
-    roomCellStyle(room) {
-        return `background-color: ${this.palette(room).cell};`;
+        const shade = Math.max(siblings.findIndex((item) => item.id === room.id), 0) % 3;
+        return `o_fav_room o_fav_room_${key} o_fav_shade_${shade} ${extra || ""}`.trim();
     }
 
     nextDayString(day) {

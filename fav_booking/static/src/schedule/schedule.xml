@@ -42,7 +42,7 @@
                                         <tr>
                                             <th class="o_fav_jam">JAM</th>
                                             <t t-foreach="this.rooms" t-as="room" t-key="room.id">
-                                                <th class="o_fav_room_head" t-att-style="this.roomHeadStyle(room)" t-out="room.name"/>
+                                                <th t-att-class="this.roomClass(room, 'o_fav_room_head')" t-out="room.name"/>
                                             </t>
                                         </tr>
                                     </thead>
@@ -53,8 +53,7 @@
                                                 <t t-foreach="this.rooms" t-as="room" t-key="room.id">
                                                     <t t-set="cell" t-value="this.cell(board, room.id, slot.index)"/>
                                                     <td t-if="cell.show"
-                                                        class="o_fav_tint o_fav_book_cell"
-                                                        t-att-style="this.roomCellStyle(room)"
+                                                        t-att-class="this.roomClass(room, 'o_fav_tint o_fav_book_cell')"
                                                         t-att-rowspan="cell.slot_span">
                                                         <button type="button"
                                                             t-attf-class="o_fav_booked o_fav_state_{{ cell.state }} {{ this.blockIsNow(board, cell) ? 'o_fav_now_block' : '' }}"
@@ -63,7 +62,7 @@
                                                             <span class="o_fav_time" t-out="cell.time_label"/>
                                                         </button>
                                                     </td>
-                                                    <td t-elif="cell.empty" class="o_fav_tint" t-att-style="this.roomCellStyle(room)"/>
+                                                    <td t-elif="cell.empty" t-att-class="this.roomClass(room, 'o_fav_tint')"/>
                                                 </t>
                                             </tr>
                                         </t>
