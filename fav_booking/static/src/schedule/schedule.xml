@@ -23,6 +23,11 @@
                 <span class="text-muted" t-if="this.state.data">
                     <t t-out="this.state.data.tz"/>
                 </span>
+                <div class="o_fav_legend ms-auto d-flex align-items-center gap-2">
+                    <span class="o_fav_legend_item o_fav_state_confirmed">Confirmed</span>
+                    <span class="o_fav_legend_item o_fav_state_checked_in">Checked in</span>
+                    <span class="o_fav_legend_item o_fav_state_done">Done</span>
+                </div>
             </div>
             <div class="o_fav_schedule_scroll flex-grow-1">
                 <t t-if="this.state.data and this.rooms.length">
@@ -32,28 +37,33 @@
                                 <table>
                                     <thead>
                                         <tr>
-                                            <th class="o_fav_date" t-att-colspan="this.rooms.length + 1" t-out="board.label"/>
+                                            <th t-att-class="this.dateClass(board, board_index)" t-att-colspan="this.rooms.length + 1" t-out="board.label"/>
                                         </tr>
                                         <tr>
                                             <th class="o_fav_jam">JAM</th>
                                             <t t-foreach="this.rooms" t-as="room" t-key="room.id">
-                                                <th t-out="room.name"/>
+                                                <th class="o_fav_room_head" t-att-style="this.roomHeadStyle(room)" t-out="room.name"/>
                                             </t>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <t t-foreach="this.slots" t-as="slot" t-key="slot.index">
-                                            <tr>
+                                            <tr t-att-class="this.rowClass(board, slot)">
                                                 <th class="o_fav_jam" t-out="slot.label"/>
                                                 <t t-foreach="this.rooms" t-as="room" t-key="room.id">
                                                     <t t-set="cell" t-value="this.cell(board, room.id, slot.index)"/>
                                                     <td t-if="cell.show"
-                                                        t-att-rowspan="cell.slot_span"
-                                                        t-attf-class="o_fav_booked o_fav_state_{{ cell.state }}"
-                                                        t-on-click="() => this.openBooking(cell)">
-                                                        <t t-out="cell.partner"/>
+                                                        class="o_fav_tint o_fav_book_cell"
+                                                        t-att-style="this.roomCellStyle(room)"
+                                                        t-att-rowspan="cell.slot_span">
+                                                        <button type="button"
+                                                            t-attf-class="o_fav_booked o_fav_state_{{ cell.state }} {{ this.blockIsNow(board, cell) ? 'o_fav_now_block' : '' }}"
+                                                            t-on-click="() => this.openBooking(cell)">
+                                                            <span class="o_fav_name" t-out="cell.partner"/>
+                                                            <span class="o_fav_time" t-out="cell.time_label"/>
+                                                        </button>
                                                     </td>
-                                                    <td t-elif="cell.empty"/>
+                                                    <td t-elif="cell.empty" class="o_fav_tint" t-att-style="this.roomCellStyle(room)"/>
                                                 </t>
                                             </tr>
                                         </t>

@@ -965,6 +965,7 @@ class FavBooking(models.Model):
             slots.append({
                 'index': index,
                 'label': f'{self._schedule_clock(minute)}-{self._schedule_clock(minute + slot)}',
+                'start_minute': minute,
             })
             minute += slot
             index += 1
@@ -998,12 +999,15 @@ class FavBooking(models.Model):
                 continue
             for index in range(first, span_end):
                 occupied.add((room_id, index))
+            local_start = booking._as_local(booking.date_start)
+            local_end = booking._as_local(booking.date_end)
             blocks.append({
                 'id': booking.id,
                 'name': booking.name,
                 'room_id': room_id,
                 'partner': booking.partner_id.name or '',
                 'state': booking.state,
+                'time_label': f"{local_start.strftime('%H:%M')}-{local_end.strftime('%H:%M')}",
                 'slot_index': first,
                 'slot_span': span_end - first,
             })
@@ -1064,10 +1068,13 @@ class FavBooking(models.Model):
                 'label': self._schedule_date_label(current),
                 'bookings': self._schedule_blocks(day_bookings, origin, total_minutes),
             })
+        now = datetime.now(self._schedule_tz())
         return {
             'day': fields.Date.to_string(day),
             'days': days,
             'tz': str(self._schedule_tz()),
+            'today': fields.Date.to_string(now.date()),
+            'now_minute': now.hour * 60 + now.minute,
             'floor_id': floor.id if floor else False,
             'open_hour': open_hour,
             'close_hour': close_hour,
@@ -1077,6 +1084,7 @@ class FavBooking(models.Model):
                 'id': room.id,
                 'name': room.name,
                 'sequence': room.sequence,
+                'room_type': room.room_type or '',
             } for room in selected],
             'slots': slots,
             'boards': boards,

@@ -161,8 +161,12 @@ class TestFavAutoBill(TransactionCase):
         block = data['boards'][0]['bookings'][0]
         self.assertEqual(block['partner'], 'Schedule Guest')
         self.assertEqual(block['state'], 'confirmed')
+        self.assertEqual(block['time_label'], '10:00-12:00')
         self.assertEqual(block['slot_index'], 0)
         self.assertEqual(block['slot_span'], 4)
+        self.assertEqual(data['slots'][0]['start_minute'], 600)
+        self.assertEqual(data['rooms'][0]['room_type'], 'VIP PLUS')
+        self.assertEqual(data['rooms'][1]['room_type'], 'VVIP')
         self.assertEqual(block['room_id'], self.vip.id)
         self.assertFalse(any(item['room_id'] == self.vvip.id for item in data['boards'][0]['bookings']))
         self.assertTrue(any(floor['name'] == 'FAV Rental Tenun' for floor in data['floors']))

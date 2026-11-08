@@ -96,6 +96,136 @@ export class FavSchedule extends Component {
         return this.state.data?.slots || [];
     }
 
+    familyKey(room) {
+        const type = `${room.room_type || ""} ${room.name || ""}`.toLowerCase();
+        if (type.includes("vvip")) {
+            return "vvip";
+        }
+        if (type.includes("deluxe")) {
+            return "deluxe";
+        }
+        if (type.includes("suite")) {
+            return "suite";
+        }
+        if (type.includes("vip")) {
+            return "vip";
+        }
+        return "other";
+    }
+
+    palette(room) {
+        const families = {
+            vip: {
+                heads: ["#dbeafe", "#bfdbfe", "#e0f2fe"],
+                cells: ["#f8fbff", "#f3f8ff", "#f5fbff"],
+                ink: "#1e3a8a",
+            },
+            vvip: {
+                heads: ["#ede9fe", "#ddd6fe", "#f3e8ff"],
+                cells: ["#faf8ff", "#f7f4ff", "#fdf9ff"],
+                ink: "#5b21b6",
+            },
+            deluxe: {
+                heads: ["#ccfbf1", "#99f6e4", "#d1fae5"],
+                cells: ["#f4fffc", "#f0fdfa", "#f6fef9"],
+                ink: "#115e59",
+            },
+            suite: {
+                heads: ["#ffedd5", "#fed7aa", "#fef3c7"],
+                cells: ["#fffaf5", "#fff7ed", "#fffdf5"],
+                ink: "#9a3412",
+            },
+            other: {
+                heads: ["#fce7f3", "#e0e7ff", "#dcfce7"],
+                cells: ["#fff7fb", "#f8f9ff", "#f6fef8"],
+                ink: "#334155",
+            },
+        };
+        const key = this.familyKey(room);
+        const family = families[key];
+        const siblings = this.rooms.filter((item) => this.familyKey(item) === key);
+        const shade = Math.max(siblings.findIndex((item) => item.id === room.id), 0) % family.heads.length;
+        return {
+            head: family.heads[shade],
+            cell: family.cells[shade],
+            ink: family.ink,
+        };
+    }
+
+    roomHeadStyle(room) {
+        const tone = this.palette(room);
+        return `background-color: ${tone.head}; color: ${tone.ink};`;
+    }
+
+    roomCellStyle(room) {
+        return `background-color: ${this.palette(room).cell};`;
+    }
+
+    nextDayString(day) {
+        const current = new Date(`${day}T12:00:00`);
+        current.setDate(current.getDate() + 1);
+        const month = String(current.getMonth() + 1).padStart(2, "0");
+        const date = String(current.getDate()).padStart(2, "0");
+        return `${current.getFullYear()}-${month}-${date}`;
+    }
+
+    minutesOnBoard(day) {
+        const data = this.state.data;
+        if (!data || data.now_minute === undefined || data.now_minute === null) {
+            return null;
+        }
+        if (day === data.today) {
+            return data.now_minute;
+        }
+        if (data.today === this.nextDayString(day)) {
+            return 1440 + data.now_minute;
+        }
+        return null;
+    }
+
+    isToday(day) {
+        return Boolean(this.state.data) && day === this.state.data.today;
+    }
+
+    rowClass(board, slot) {
+        const parts = [slot.start_minute % 60 === 0 ? "o_fav_on_hour" : "o_fav_half"];
+        if (Math.floor(slot.start_minute / 60) % 2 === 1) {
+            parts.push("o_fav_hour_alt");
+        }
+        if (this.slotIsNow(board, slot)) {
+            parts.push("o_fav_now");
+        }
+        return parts.join(" ");
+    }
+
+    slotIsNow(board, slot) {
+        const minutes = this.minutesOnBoard(board.day);
+        if (minutes === null) {
+            return false;
+        }
+        const length = this.state.data.slot_minutes || 30;
+        return minutes >= slot.start_minute && minutes < slot.start_minute + length;
+    }
+
+    blockIsNow(board, booking) {
+        const minutes = this.minutesOnBoard(board.day);
+        const slot = this.slots[booking.slot_index];
+        if (minutes === null || !slot) {
+            return false;
+        }
+        const length = this.state.data.slot_minutes || 30;
+        const start = slot.start_minute;
+        return minutes >= start && minutes < start + booking.slot_span * length;
+    }
+
+    dateClass(board, index) {
+        const parts = ["o_fav_date", index % 2 ? "o_fav_date_b" : "o_fav_date_a"];
+        if (this.isToday(board.day)) {
+            parts.push("o_fav_date_today");
+        }
+        return parts.join(" ");
+    }
+
     get boards() {
         const boards = this.state.data?.boards || [];
         return boards.map((board) => {

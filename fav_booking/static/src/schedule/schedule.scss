@@ -9,6 +9,16 @@
         width: 16rem;
     }
 
+    .o_fav_legend_item {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.15rem 0.65rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+    }
+
     .o_fav_schedule_scroll {
         overflow: auto;
         min-height: 0;
@@ -30,10 +40,10 @@
 
     .o_fav_schedule_day th,
     .o_fav_schedule_day td {
-        border: 1px solid #dee2e6;
+        border: 1px solid #e2e8f0;
         min-width: 7.5rem;
-        height: 1.75rem;
-        padding: 0.1rem 0.4rem;
+        height: 1.85rem;
+        padding: 0.1rem 0.35rem;
         background: #fff;
         font-size: 0.8rem;
         text-align: center;
@@ -43,8 +53,9 @@
     .o_fav_jam {
         min-width: 7.4rem;
         width: 7.4rem;
-        font-weight: 600;
-        background: #f8f9fa;
+        font-weight: 700;
+        background: #f8fafc;
+        color: #334155;
         white-space: nowrap;
     }
 
@@ -57,30 +68,103 @@
     .o_fav_schedule_day thead th {
         position: sticky;
         z-index: 4;
-        background: #f4f6f8;
-        font-weight: 700;
+        font-weight: 800;
     }
 
     .o_fav_date {
         top: 0;
-        height: 2rem;
+        height: 2.15rem;
+        color: #fff;
+        letter-spacing: 0.01em;
+    }
+
+    .o_fav_date_a { background: #1d4ed8; }
+    .o_fav_date_b { background: #0f766e; }
+
+    .o_fav_date_today {
+        background: #c2410c;
+        box-shadow: inset 0 -4px 0 #fdba74;
     }
 
     .o_fav_schedule_day thead tr:nth-child(2) th {
-        top: 2rem;
+        top: 2.15rem;
+    }
+
+    .o_fav_room_head {
+        font-weight: 800;
     }
 
     .o_fav_schedule_day:first-child thead .o_fav_jam {
         z-index: 5;
+        background: #f8fafc;
+    }
+
+    .o_fav_on_hour > th,
+    .o_fav_on_hour > td {
+        border-top: 2px solid #64748b;
+    }
+
+    .o_fav_half > th,
+    .o_fav_half > td {
+        border-top: 1px solid #e2e8f0;
+    }
+
+    .o_fav_hour_alt > .o_fav_jam,
+    .o_fav_hour_alt > .o_fav_tint {
+        background-image: linear-gradient(rgba(15, 23, 42, 0.055), rgba(15, 23, 42, 0.055));
+    }
+
+    .o_fav_now > th,
+    .o_fav_now > td {
+        box-shadow: inset 0 3px 0 #dc2626;
+    }
+
+    .o_fav_now > .o_fav_jam {
+        color: #dc2626;
+        background-color: #fff1f2;
+    }
+
+    .o_fav_book_cell {
+        position: relative;
+        padding: 0;
     }
 
     .o_fav_booked {
+        position: absolute;
+        inset: 3px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.05rem;
+        width: auto;
+        border: 0;
+        border-radius: 0.55rem;
+        padding: 0.15rem 0.35rem;
+        color: #fff;
         cursor: pointer;
-        font-weight: 700;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
     }
 
-    .o_fav_state_draft { background: #e9ecef; }
-    .o_fav_state_confirmed { background: #cfe2ff; }
-    .o_fav_state_checked_in { background: #ffe8a3; }
-    .o_fav_state_done { background: #d1e7dd; }
+    .o_fav_name {
+        font-size: 0.82rem;
+        font-weight: 800;
+        line-height: 1.15;
+    }
+
+    .o_fav_time {
+        font-size: 0.68rem;
+        font-weight: 600;
+        line-height: 1.1;
+        opacity: 0.92;
+    }
+
+    .o_fav_state_confirmed { background: #1d4ed8; color: #fff; }
+    .o_fav_state_checked_in { background: #15803d; color: #fff; }
+    .o_fav_state_done { background: #64748b; color: #fff; }
+    .o_fav_state_draft { background: #94a3b8; color: #fff; }
+
+    .o_fav_now_block {
+        box-shadow: 0 0 0 2px #dc2626, 0 1px 2px rgba(15, 23, 42, 0.18);
+    }
 }
